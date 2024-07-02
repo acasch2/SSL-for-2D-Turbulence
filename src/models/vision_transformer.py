@@ -1,0 +1,149 @@
+# Code adpated from IBM/NASA's Prithvi
+
+import torch
+import torch.nn as nn
+from timm.models.vision_transformer import Block
+from einops import rearrange
+
+from utils.patch_embed import PatchEmbed
+from utils.pos_embed import get_1d_sincos_pos_embed_from_grid, get_3d_sincos_pos_embed
+
+
+class ViT(nn.Module):
+  """ Vision Transformer
+  """
+
+  def __init__(
+      self,
+      img_size=256,
+      patch_size=16,
+      num_frames=1,
+      tubelet_size=1,
+      in_chans=1,
+      encoder_embed_dim=192,
+      encoder_depth=6,
+      encoder_num_heads=6,
+      decoder_embed_dim=192,
+      decoder_depth=6,
+      decoder_num_heads=6,
+      mlp_ratio=4.,
+      norm_layer=nn.LayerNorm,
+      num_out_frames=1
+  ):
+      super().__init__()
+
+      # --- Encoder ---
+      self.patch_embed = PatchEmbed(img_size, patch_size, num_frames, tubelet_size, in_chans,
+                                    encoder_embed_dim, norm_layer)
+      num_patches = self.patch_embed.num_patches
+
+      self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, encoder_embed_dim), requires_grad=False)
+
+      self.encoder_blocks = nn.ModuleList([
+          Block(encoder_embed_dim, encoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+          for i in range(encoder_depth)
+      ])
+      self.norm = norm_layer(encoder_embed_dim)
+
+      # --- Decoder ---
+      self.decoder_embed = nn.Linear(encoder_embed_dim, decoder_embed_dim, bias=True)
+
+      self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches, decoder_embed_dim), requires_grad=False)
+
+      self.decoder_blocks = nn.ModuleList([
+          Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+          for i in range(decoder_depth)
+      ])
+      self.decoder_norm = norm_layer(decoder_embed_dim)
+      self.decoder_pred = nn.Linear(decoder_embed_dim, num_out_frames*patch_size*patch_size*in_chans, bias=True)
+      self.num_out_frames = num_out_frames
+      # ---------------
+
+      self.initialize_weights()
+
+  def initialize_weights(self):
+      # initialize (and freeze) pos_embed by sin-cos embedding
+      pos_embed = get_3d_sincos_pos_embed(self.pos_embed.shape[-1], self.patch_embed.grid_size, cls_token=False)
+      self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+      decoder_pos_embed = get_3d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], self.patch_embed.grid_size, cls_token=False)
+      self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
+
+      # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
+      w = self.patch_embed.proj.weight.data
+      torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+
+      # initialize nn.Linear and nn.LayerNorm
+      self.apply(self._init_weights)
+
+  def _init_weights(self, m):
+      if isinstance(m, nn.Linear):
+         # we use xavier uniform following official JAX ViT:
+         torch.nn.init.xavier_uniform_(m.weight)
+         if isinstance(m, nn.Linear) and m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+      elif isinstance(m, nn.LayerNorm):
+           nn.init.constant_(m.bias, 0)
+           nn.init.constant_(m.weight, 1.0)
+
+  def patchify(self, imgs):
+      """ For calculating loss.
+      imgs: B, C, T, H, W
+      x: B, L, D
+      """
+      p = self.patch_embed.patch_size[0]
+      tub = self.num_out_frames
+      x = rearrange(imgs, 'b c (t tub) (h p) (w q) -> b (t h w) (tub p q c)',
+                    tub=tub, p=p, q=p)
+      return x
+
+  def unpatchify(self, x):
+      """ For calculating loss.
+      x: B, L, D
+      imgs: B, C, T, H, W
+      """
+      p = self.patch_embed.patch_size[0]
+      num_p = self.patch_embed.img_size[0] // p
+      tub = self.num_out_frames
+      imgs = rearrange(x, 'b (t h w) (tub p q c) -> b c (t tub) (h p) (w q)',
+                       h=num_p, w=num_p, tub=tub, p=p, q=p)
+      return imgs
+
+  def forward_encoder(self, x):
+      # embed patches
+      x = self.patch_embed(x)
+      # add positional encoding
+      x = x + self.pos_embed
+
+      for blk in self.encoder_blocks:
+          x = blk(x)
+      x = self.norm(x)
+      return x
+
+  def forward_decoder(self, x):
+      # embed tokens
+      x = self.decoder_embed(x)
+      # add pos embedding
+      x = x + self.decoder_pos_embed
+      for blk in self.decoder_blocks:
+          x = blk(x)
+      x = self.decoder_norm(x)
+      x = self.decoder_pred(x)
+      return x
+
+  def forward_loss(self, img, pred):
+      """
+      img: B, C, T, H, W
+      pred: B, C, T, H, W
+      """
+      loss = (pred - img) ** 2
+      loss = loss.mean()
+
+      return loss
+
+  def forward(self, x):
+      latent = self.forward_encoder(x)
+      pred = self.forward_decoder(latent)
+      pred = self.unpatchify(pred)
+
+      return pred
