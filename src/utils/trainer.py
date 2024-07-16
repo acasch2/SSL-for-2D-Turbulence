@@ -22,12 +22,14 @@ class Trainer():
         logging.info("initialize data loader")
         self.train_dataloader, self.train_dataset = get_dataloader(data_dir=params["data_dir"],
                                                                    file_range=params["train_file_range"],
+                                                                   target_step=params["target_step"],
                                                                    batch_size=params["batch_size"],
                                                                    train=True,
                                                                    num_workers=params["num_workers"],
                                                                    pin_memory=params["pin_memory"])
         self.valid_dataloader, self.valid_dataset = get_dataloader(data_dir=params["data_dir"],
                                                                    file_range=params["valid_file_range"],
+                                                                   target_step=params["target_step"],
                                                                    batch_size=params["batch_size"],
                                                                    train=False,
                                                                    num_workers=params["num_workers"],
@@ -48,7 +50,6 @@ class Trainer():
             decoder_depth=params["decoder_depth"],
             decoder_num_heads=params["decoder_num_heads"],
             mlp_ratio=params["mlp_ratio"],
-            norm_layer=params["norm_layer"],
             num_out_frames=params["num_out_frames"]).to(self.device)
 
         # Watch model gradients with wandb
