@@ -50,12 +50,26 @@ class Trainer():
             decoder_depth=params["decoder_depth"],
             decoder_num_heads=params["decoder_num_heads"],
             mlp_ratio=params["mlp_ratio"],
-            num_out_frames=params["num_out_frames"]).to(self.device)
+            num_out_frames=params["num_out_frames"],
+            checkpointing=params["checkpointing"]).to(self.device)
 
         # Watch model gradients with wandb
 
         # Set optimizer
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
+
+        
+        self.startEpoch = 0
+        self.epoch = self.startEpoch
+
+        # Set learning rate scheduluer
+        if params["scheduler"] == 'ReduceLROnPlateau':
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.2, patience=5, mode='min')
+        elif params["scheduler"] == 'CosineAnnealingLR':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=params["max_epochs"],
+                                                                        last_epoch=self.startEpoch-1)
+        else:
+            self.scheduler = None
 
         # Construct training lr scheduler if using
 
@@ -70,6 +84,7 @@ class Trainer():
         if self.params["log_to_screen"]:
             logging.info("Starting training loop ...")
 
+        best_valid_loss = 1.e6
         for epoch in range(self.params["max_epochs"]):
             start = time.time()
 
@@ -77,6 +92,20 @@ class Trainer():
             valid_time, valid_logs = self.validate_one_epoch()
 
             # Adjust lr rate schedule if using
+            if self.params["scheduler"] == 'ReduceLROnPlateau':
+                self.scheduler.step(valid_logs['loss'])
+            elif self.params["scheduler"] == 'ConsineAnnealingLR':
+                self.scheduler.step()
+                if self.epoch >= self.params.max_epochs:
+                    logging.info("Terminating training after reaching params.max_epochs while LR scheduler is set to CosineAnnealingLR")
+                    break
+
+            # Save model checkpoint
+            if self.params["save_checkpoint"]:
+                # Save at end of every epoch ....
+                if valid_logs["loss"] <= best_valid_loss:
+                    self.save_checkpoint(self.params["model_save_path"])
+                    best_valid_loss = valid_logs["loss"]
 
             if self.params["log_to_screen"]:
                 logging.info("Time taken for epoch {} is {} sec".format(epoch+1, time.time()-start))
@@ -88,6 +117,7 @@ class Trainer():
         logging.info("----- DONE -----")
 
     def train_one_epoch(self):
+        self.epoch += 1
         tr_time = 0
         data_time = 0
         self.model.train()
@@ -96,13 +126,17 @@ class Trainer():
 
             data_start = time.time()
             inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
+            if self.params["checkpointing"]:
+                inputs.requires_grad_()
+
             data_time += time.time() - data_start
 
             tr_start = time.time()
 
             self.model.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
 
-            outputs = self.model(inputs)
+            outputs = self.model(inputs, train=True)
             loss = self.model.forward_loss(labels, outputs)
 
             loss.backward()
@@ -128,7 +162,7 @@ class Trainer():
 
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
-                outputs = self.model(inputs)
+                outputs = self.model(inputs, train=False)
                 loss = self.model.forward_loss(labels, outputs)
 
                 # check valid pred
@@ -139,3 +173,6 @@ class Trainer():
         logs = {"loss": loss}
 
         return valid_time, logs
+
+    def save_checkpoint(self, checkpoint_path):
+        torch.save(self.model.state_dict(), checkpoint_path)

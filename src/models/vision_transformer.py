@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 from timm.models.vision_transformer import Block
 from einops import rearrange
 
@@ -28,7 +29,8 @@ class ViT(nn.Module):
       decoder_num_heads=6,
       mlp_ratio=4.,
       norm_layer=nn.LayerNorm,
-      num_out_frames=1
+      num_out_frames=1,
+      checkpointing=None
   ):
       super().__init__()
 
@@ -60,6 +62,8 @@ class ViT(nn.Module):
       # ---------------
 
       self.initialize_weights()
+
+      self.checkpointing = checkpointing
 
   def initialize_weights(self):
       # initialize (and freeze) pos_embed by sin-cos embedding
@@ -109,26 +113,54 @@ class ViT(nn.Module):
                        h=num_p, w=num_p, tub=tub, p=p, q=p)
       return imgs
 
-  def forward_encoder(self, x):
-      # embed patches
-      x = self.patch_embed(x)
-      # add positional encoding
-      x = x + self.pos_embed
-
-      for blk in self.encoder_blocks:
-          x = blk(x)
-      x = self.norm(x)
+  def pos_embed_checkpointing(self, x, pos_embed):
+      x = x + pos_embed
       return x
 
-  def forward_decoder(self, x):
-      # embed tokens
-      x = self.decoder_embed(x)
-      # add pos embedding
-      x = x + self.decoder_pos_embed
+  def forward_encoder(self, x, train=False):
+      # embed patches + add position encoding
+      if self.checkpointing and train:
+          x = checkpoint(self.patch_embed, x)
+          x = checkpoint(self.pos_embed_checkpointing, x, self.pos_embed)
+      else:
+          x = self.patch_embed(x)
+          x = x + self.pos_embed
+
+      for blk in self.encoder_blocks:
+          if self.checkpointing and train:
+              x = checkpoint(blk, x)
+          else:
+              x = blk(x)
+
+      if self.checkpointing and train:
+          x = checkpoint(self.norm, x)
+      else:
+          x = self.norm(x)
+
+      return x
+
+  def forward_decoder(self, x, train=False):
+      # embed tokens + add position encoding
+      if self.checkpointing and train:
+          x = checkpoint(self.decoder_embed, x)
+          x = checkpoint(self.pos_embed_checkpointing, x, self.decoder_pos_embed)
+      else:
+          x = self.decoder_embed(x)
+          x = x + self.decoder_pos_embed
+
       for blk in self.decoder_blocks:
-          x = blk(x)
-      x = self.decoder_norm(x)
-      x = self.decoder_pred(x)
+          if self.checkpointing and train:
+              x = checkpoint(blk, x)
+          else:
+              x = blk(x)
+
+      if self.checkpointing and train:
+          x = checkpoint(self.decoder_norm, x)
+          x = checkpoint(self.decoder_pred, x)
+      else:
+          x = self.decoder_norm(x)
+          x = self.decoder_pred(x)
+
       return x
 
   def forward_loss(self, img, pred):
@@ -141,9 +173,12 @@ class ViT(nn.Module):
 
       return loss
 
-  def forward(self, x):
-      latent = self.forward_encoder(x)
-      pred = self.forward_decoder(latent)
-      pred = self.unpatchify(pred)
+  def forward(self, x, train=False):
+      latent = self.forward_encoder(x, train=train)
+      pred = self.forward_decoder(latent, train=train)
+      if self.checkpointing and train:
+          pred = checkpoint(self.unpatchify, pred)
+      else:
+          pred = self.unpatchify(pred)
 
       return pred

@@ -27,10 +27,11 @@ if __name__=='__main__':
     trainer.train()
 
     if params["save_model"]:
-        model_fp = os.path.join(params["model_save_dir"], params["model_save_name"])
+        model_fp = os.path.normpath(params["model_save_path"])
+        model_fp_split = model_fp.split(os.sep)
+        model_fp = os.path.join("/",*model_fp_split[:-1], "last_epoch_"+model_fp_split[-1])
         torch.save(trainer.model.state_dict(), model_fp)
-        params_fp = os.path.join(params["model_save_dir"], params["params_save_name"])
         logging.info("Successfully saved model state_dict.")
-        with open(params_fp, "wb") as fp:
+        with open(params["params_save_path"], "wb") as fp:
             pickle.dump(params, fp)
         logging.info("Successfully saved params file.")
