@@ -126,9 +126,6 @@ class Trainer():
 
             data_start = time.time()
             inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
-            if self.params["checkpointing"]:
-                inputs.requires_grad_()
-
             data_time += time.time() - data_start
 
             tr_start = time.time()

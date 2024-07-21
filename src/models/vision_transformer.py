@@ -113,27 +113,19 @@ class ViT(nn.Module):
                        h=num_p, w=num_p, tub=tub, p=p, q=p)
       return imgs
 
-  def pos_embed_checkpointing(self, x, pos_embed):
-      x = x + pos_embed
-      return x
-
   def forward_encoder(self, x, train=False):
       # embed patches + add position encoding
-      if self.checkpointing and train:
-          x = checkpoint(self.patch_embed, x)
-          x = checkpoint(self.pos_embed_checkpointing, x, self.pos_embed)
-      else:
-          x = self.patch_embed(x)
-          x = x + self.pos_embed
+      x = self.patch_embed(x)
+      x = x + self.pos_embed
 
       for blk in self.encoder_blocks:
           if self.checkpointing and train:
-              x = checkpoint(blk, x)
+              x = checkpoint(blk, x, use_reentrant=False)
           else:
               x = blk(x)
 
       if self.checkpointing and train:
-          x = checkpoint(self.norm, x)
+          x = checkpoint(self.norm, x, use_reentrant=False)
       else:
           x = self.norm(x)
 
@@ -141,22 +133,18 @@ class ViT(nn.Module):
 
   def forward_decoder(self, x, train=False):
       # embed tokens + add position encoding
-      if self.checkpointing and train:
-          x = checkpoint(self.decoder_embed, x)
-          x = checkpoint(self.pos_embed_checkpointing, x, self.decoder_pos_embed)
-      else:
-          x = self.decoder_embed(x)
-          x = x + self.decoder_pos_embed
+      x = self.decoder_embed(x)
+      x = x + self.decoder_pos_embed
 
       for blk in self.decoder_blocks:
           if self.checkpointing and train:
-              x = checkpoint(blk, x)
+              x = checkpoint(blk, x, use_reentrant=True)
           else:
               x = blk(x)
 
       if self.checkpointing and train:
-          x = checkpoint(self.decoder_norm, x)
-          x = checkpoint(self.decoder_pred, x)
+          x = checkpoint(self.decoder_norm, x, use_reentrant=True)
+          x = checkpoint(self.decoder_pred, x, use_reentrant=True)
       else:
           x = self.decoder_norm(x)
           x = self.decoder_pred(x)
@@ -176,9 +164,6 @@ class ViT(nn.Module):
   def forward(self, x, train=False):
       latent = self.forward_encoder(x, train=train)
       pred = self.forward_decoder(latent, train=train)
-      if self.checkpointing and train:
-          pred = checkpoint(self.unpatchify, pred)
-      else:
-          pred = self.unpatchify(pred)
+      pred = self.unpatchify(pred)
 
       return pred
