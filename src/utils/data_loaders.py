@@ -6,9 +6,9 @@ from py2d.initialize import initialize_wavenumbers_rfft2
 from py2d.convert import Omega2Psi, Psi2UV
 
 
-def get_dataloader(data_dir, file_range, target_step, batch_size, train, num_workers=1, pin_memory=True):
+def get_dataloader(data_dir, file_range, target_step, batch_size, train, stride=1, num_workers=1, pin_memory=True):
 
-    dataset = TurbulenceDataset(data_dir=data_dir, file_range=file_range, target_step=target_step)
+    dataset = TurbulenceDataset(data_dir=data_dir, file_range=file_range, target_step=target_step, stride=stride)
 
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
@@ -20,20 +20,24 @@ def get_dataloader(data_dir, file_range, target_step, batch_size, train, num_wor
 
 
 class TurbulenceDataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir, file_range, target_step):
+    def __init__(self, data_dir, file_range, target_step, stride):
         """
         Args:
             data_dir (str): Directory with .mat data files.
             file_range (tuple): Range of file numbers (start, end).
             target_step (int): Number of steps forward for target output.
+            stride (int): Number of steps between samples.
         """
         self.data_dir = data_dir
-        self.file_numbers = range(file_range[0], file_range[1] + 1)
-        self.file_list = [os.path.join(data_dir, f"{i}.mat") for i in self.file_numbers]
+        self.input_file_numbers = range(file_range[0], file_range[1] + 1, stride)
+        self.label_file_numbers = range(file_range[0]+target_step, file_range[1]+1+target_step, stride)
+        self.input_file_list = [os.path.join(data_dir, f"{i}.mat") for i in self.input_file_numbers]
+        self.label_file_list = [os.path.join(data_dir, f"{i}.mat") for i in self.label_file_numbers]
         self.target_step = target_step
+        self.stride = stride
 
     def __len__(self):
-        return len(self.file_list) - self.target_step
+        return len(self.input_file_list)
 
     def __getitem__(self, idx):
         """
@@ -46,8 +50,8 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        input_file_path = self.file_list[idx]
-        label_file_path = self.file_list[idx+self.target_step]
+        input_file_path = self.input_file_list[idx]
+        label_file_path = self.label_file_list[idx]
 
         input_mat_data = loadmat(input_file_path)
         label_mat_data = loadmat(label_file_path)
