@@ -4,7 +4,9 @@ import os
 import time
 import logging
 import torch
+#from torch.profiler import profile, record_function, ProfilerActivity
 
+#torch.backends.cuda.enable_flash_sdp(True)
 
 class Trainer():
     def __init__(self, params):
@@ -133,6 +135,10 @@ class Trainer():
             self.model.zero_grad()
             self.optimizer.zero_grad(set_to_none=True)
 
+            # Profile
+            #with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
+            #    with record_function("model inference"):
+            
             outputs = self.model(inputs, train=True)
             loss = self.model.forward_loss(labels, outputs)
 
@@ -143,6 +149,9 @@ class Trainer():
             tr_time += time.time() - tr_start
 
             logs = {'loss': loss}
+
+            #print(f'=============== PROFILER ==============\n')
+            #print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
         return tr_time, data_time, logs
 
