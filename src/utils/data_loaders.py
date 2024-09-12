@@ -1,22 +1,32 @@
 import os
 import torch
+from torch.utils.data.distributed import DistributedSampler
 from scipy.io import loadmat
 import numpy as np
 from py2d.initialize import initialize_wavenumbers_rfft2
 from py2d.convert import Omega2Psi, Psi2UV
 
 
-def get_dataloader(data_dir, file_range, target_step, batch_size, train, stride=1, num_workers=1, pin_memory=True):
+def get_dataloader(data_dir, file_range, target_step, batch_size, train, distributed, stride=1, num_workers=1, pin_memory=True):
 
     dataset = TurbulenceDataset(data_dir=data_dir, file_range=file_range, target_step=target_step, stride=stride)
 
+    sampler = DistributedSampler(dataset, shuffle=train) if distributed else None
+    if train and not distributed:
+        sampler = torch.utils.data.RandomSampler(dataset)
+
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
-                                             shuffle=train,
+                                             shuffle=False,  # (sampler is None)
+                                             sampler=sampler,  # if train else None
                                              num_workers=num_workers,
                                              pin_memory=pin_memory)
 
-    return dataloader, dataset
+
+    if train:
+        return dataloader, dataset, sampler
+    else:
+        return dataloader, dataset
 
 
 class TurbulenceDataset(torch.utils.data.Dataset):

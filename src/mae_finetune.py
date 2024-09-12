@@ -22,8 +22,10 @@ if __name__=='__main__':
         logging.basicConfig(level=logging.INFO,
                 format="%(levelname)s | %(asctime)s | %(message)s",
                 filename=params["logfile_path"])
-        
+    
+    logging.info("Preparing MAE finetune trainer.")
     trainer = Trainer(params)
+
     trainer.train()
 
     if params["save_model"]:
