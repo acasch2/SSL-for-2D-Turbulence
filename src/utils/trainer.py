@@ -32,6 +32,8 @@ class Trainer():
                                                                                        batch_size=params["batch_size"],
                                                                                        train=True,
                                                                                        distributed=dist.is_initialized(),
+                                                                                       num_frames=params["num_frames"],
+                                                                                       num_out_frames=params["num_out_frames"],
                                                                                        num_workers=params["num_workers"],
                                                                                        pin_memory=params["pin_memory"])
 
@@ -41,6 +43,8 @@ class Trainer():
                                                                    batch_size=params["batch_size"],
                                                                    train=False,
                                                                    distributed=dist.is_initialized(),
+                                                                   num_frames=params["num_frames"],
+                                                                   num_out_frames=params["num_out_frames"],
                                                                    num_workers=params["num_workers"],
                                                                    pin_memory=params["pin_memory"])
         logging.info("data loader initialized")

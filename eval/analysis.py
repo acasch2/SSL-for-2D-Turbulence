@@ -2,146 +2,488 @@
 import sys
 import torch
 from torch import nn
+import torch.distributed as dist
 import os
-import pickle
+import ast
 from scipy.io import loadmat
 import numpy as np
 from py2d.initialize import initialize_wavenumbers_rfft2
 from py2d.convert import Omega2Psi, Psi2UV
 from matplotlib import pyplot as plt
 from matplotlib import cm
-print(f'Here 1.')
+import matplotlib as mpl
+from ruamel.yaml import YAML
+import imageio
 
-sys.path.append('/jet/home/dpatel9/SSL-Wavelets/')
-sys.path.append('/jet/home/dpatel9/SSL-Wavelets/src/')
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+src_dir = os.path.join(parent_dir, 'src')
+sys.path.append(parent_dir)
+sys.path.append(src_dir)
 from src.models.vision_transformer import ViT
 from src.utils.data_loaders import get_dataloader
 
 
-def n_step_prediction(model, ic, n=1):
-    """Produce an n-step forward roll-out 
+# ================================================================================ #
+
+def n_step_rollout(model, ic, n=1):
+    """Produce an n-step forward roll-out
     prediction.
     Args:
         model: trained pytorch model.
-        ic: initial condition for prediction.
-        n (int): nnumber of steps to predict for.
+        ic: [B=1, C, T, X, Y] initial condition for prediction.
+        n (int): number of steps to predict for.
     Returns:
-        pred: n-step model prediction (time along dim=0)."""
-    
+        pred: [B=n, C, T, X, Y] n-step model prediction (time along dim=0)."""
+
     pred = [ic]
     with torch.no_grad():
         for i in range(n):
             pred.append(model(pred[-1]))
-    
+
     pred = torch.cat(pred, dim=0)
 
     return pred
 
-def get_rmse(target, pred, dims_to_reduce=None):
-    err = (target - pred) ** 2
-    err = err.mean(dim=dims_to_reduce)
-    rmse = torch.sqrt(err)
+def get_rmse(y, y_hat, climo=None):
+    
+    if climo is None:
+        climo = np.zeros((y.shape[-2], y.shape[-1]))
+
+    y_anom = y - climo
+    y_hat_anom = y_hat - climo
+    err = (y_anom - y_hat_anom) ** 2
+    err = np.mean(err, axis=(-1, -2))
+    rmse = np.sqrt(err)
+    
     return rmse
 
-def get_avg_rmse(dataloader, model):
+def get_acc(y, y_hat, climo=None):
+    """
+    Args:
+        y, y_hat: [B=n_steps, X, Y]
+    """
 
-    rmse, rmse_per = [], []
+    if climo is None:
+        climo = np.zeros((y.shape[-2], y.shape[-1]))
+
+    corr = []
+    for i in range(y.shape[0]):
+        y_i = y[i] - climo
+        y_hat_i = y_hat[i] - climo
+        #acc = (
+        #        np.sum(y_i * y_hat_i) /
+        #        np.sqrt(
+        #            np.sum(y_i ** 2) * np.sum(y_hat_i ** 2)
+        #            )
+        #        )
+        #corr.append(acc)
+        corr.append(np.corrcoef(y_i.flatten(), y_hat_i.flatten())[1, 0])
+
+    return np.array(corr)
+
+def spectrum_zonal_average_2D_FHIT(U,V):
+  """
+  Zonal averaged spectrum for 2D flow variables
+
+  Args:
+    U: 2D square matrix, velocity
+    V: 2D square matrix, velocity
+
+  Returns:
+    E_hat: 1D array
+    wavenumber: 1D array
+  """
+
+  # Check input shape
+  if U.ndim != 2 and V.ndim != 2:
+    raise ValueError("Input flow variable is not 2D. Please input 2D matrix.")
+  if U.shape[0] != U.shape[1] and V.shape[0] != V.shape[1]:
+    raise ValueError("Dimension mismatch for flow variable. Flow variable should be a square matrix.")
+
+  N_LES = U.shape[0]
+
+  # fft of velocities along the first dimension
+  U_hat = np.fft.rfft(U, axis=1)/ N_LES
+  V_hat = np.fft.rfft(V, axis=1)/ N_LES
+
+  # Energy
+  E_hat = 0.5 * U_hat * np.conj(U_hat) + 0.5 * V_hat * np.conj(V_hat)
+
+  # Average over the second dimension
+  # Multiplying by 2 to account for the negative wavenumbers
+  E_hat = np.mean(np.abs(E_hat)*2, axis=0) 
+  wavenumbers = np.linspace(0, N_LES//2, N_LES//2+1)
+
+  return E_hat, wavenumbers
+
+def get_spectra(U, V):
+    """
+    Args:
+        U, V: [B=n_steps, X, Y]
+    Returns:
+        spectra: [B=n_steps, k]
+    """
+    
+    spectra = []
+    for i in range(U.shape[0]):
+        E_hat, wavenumbers = spectrum_zonal_average_2D_FHIT(U[i], V[i])
+        spectra.append(E_hat)
+
+    spectra = np.stack(spectra, axis=0)
+
+    return spectra, wavenumbers
+
+def make_video(pred, tar):
+    """
+    Args:
+        pred, tar: [B=n_steps, C, X, Y]
+    """
+
+    frames = []
+    for t in range(pred.shape[0]):
+        fig, axs = plt.subplots(nrows=2, ncols=2, sharex=True, sharey=True)
+        axs = axs.flatten()
+        data = [pred[t, 0, :, :], pred[t, 1, :, :], tar[t, 0, :, :], tar[t, 1, :, :]]
+        titles = ['ML: U', 'ML: V', 'Truth: U', 'Truth: V']
+        for i, ax in enumerate(axs):
+            im = ax.imshow(data[i], cmap='bwr', vmin=-5, vmax=5, aspect='equal')
+            xlen = data[i].shape[-1]
+            ax.set_title(titles[i])
+            ax.set_xticks([0, xlen/2, xlen], [0, r'$\pi$', r'$2\pi$']) 
+            ax.set_yticks([0, xlen/2, xlen], [0, r'$\pi$', r'$2\pi$'])
+        fig.subplots_adjust(right=0.85)
+        cbar_ax = fig.add_axes([0.9, 0.15, 0.05, 0.7])
+        fig.colorbar(im, cax=cbar_ax)
+        fig.suptitle(f'Timestep: {t+1}')
+        fig.savefig('temp_frame.png', bbox_inches='tight')
+        plt.close()
+
+        frames.append(imageio.imread('temp_frame.png'))
+
+    imageio.mimsave(f'Video_' + run_num + '.gif', frames, fps=5)
+
+def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict):
+    """
+    Returns:
+        results: dictionary of {'rmse','rmse_per','acc','acc_per','spectra'}
+    """
+
+    climo_data, _ = next(iter(dataloader_climo))
+    print(f'climo_data.shape: {climo_data.shape}')
+
+    climo_data = climo_data.squeeze().transpose(-1,-2).detach().cpu().numpy()    # [B=n_steps, C, X, Y]
+    climo_u = climo_data[:,0].mean(axis=0)                                       # [X, Y]
+    climo_v = climo_data[:,1].mean(axis=0) 
+    print(f'climo_u.shape: {climo_u.shape}')                                     # should be [X, Y]
+
+    rmse_u, rmse_u_per = [], []
+    rmse_v, rmse_v_per = [], []
+    acc_u, acc_u_per = [], []
+    acc_v, acc_v_per = [], []
+    spectra, spectra_tar, wavenumbers = [], [], []
     for i, batch in enumerate(dataloader):
-        
-        print(f'Iter: {i}')
-        inputs, target = batch
+
+        print(f'Prediction iteration: {i}\n')
+        inputs, targets = batch
         ic = inputs[0].unsqueeze(dim=0)
         n_steps = inputs.shape[0]
 
-        pred = n_step_prediction(model, ic, n_steps)
-        pred = pred[1:]
+        pred = n_step_rollout(model, ic, n=n_steps)
+        pred = pred[1:]  # remove ic
         per_pred = inputs[0].repeat(n_steps, 1, 1, 1, 1)
-        print(f'{per_pred.shape}')
 
-        dims_to_reduce = (1, 2, 3, 4)
-        rmse.append(get_rmse(target, pred, dims_to_reduce))
-        rmse_per.append(get_rmse(target, per_pred, dims_to_reduce))
+        print(f'pred.shape: {pred.shape}')                                      # should be: [B=n_steps, C, T=1, X, Y]
+        print(f'per_pred.shape: {per_pred.shape}')
+        print(f'targets.shape: {targets.shape}')
 
-    rmse = torch.stack(rmse, dim=0)
-    rmse = rmse.mean(dim=0).numpy()
-    rmse_per = torch.stack(rmse_per, dim=0)
-    rmse_per = rmse_per.mean(dim=0).numpy()
+        pred = pred.squeeze().transpose(-1,-2).detach().cpu().numpy()           # [B=n_steps, C, X, Y]
+        per_pred = per_pred.squeeze().transpose(-1,-2).detach().cpu().numpy()  
+        targets = targets.squeeze().transpose(-1,-2).detach().cpu().numpy()
 
-    return rmse, rmse_per, pred, target
+        pred_u = pred[:,0]                                                      # [B=n_steps, X, Y]
+        pred_v = pred[:,1]
+        per_pred_u = per_pred[:,0]
+        per_pred_v = per_pred[:,1]
+        tar_u = targets[:,0]
+        tar_v = targets[:,1]
+
+        if analysis_dict['rmse']:
+            rmse_u.append(get_rmse(tar_u, pred_u, climo=climo_u))
+            rmse_u_per.append(get_rmse(tar_u, per_pred_u, climo=climo_u))
+            rmse_v.append(get_rmse(tar_v, pred_v, climo=climo_v))
+            rmse_v_per.append(get_rmse(tar_v, per_pred_v, climo=climo_v))
+            print(f'rmse_u[-1].shape: {rmse_u[-1].shape}\n')
+
+        if analysis_dict['acc']:
+            acc_u.append(get_acc(tar_u, pred_u, climo_u))                       # [B=n_steps,]
+            acc_u_per.append(get_acc(tar_u, per_pred_u, climo_u))
+            acc_v.append(get_acc(tar_v, pred_v, climo_v))
+            acc_v_per.append(get_acc(tar_v, per_pred_v, climo_v))
+            print(f'acc_u[-1].shape: {acc_u[-1].shape}\n')
+
+        if analysis_dict['spectra']:
+            spectra_temp, wavenumbers = get_spectra(pred_u, pred_v)             # [B=n_steps, k]
+            spectra_tar_temp, _ = get_spectra(tar_u, tar_v)
+            spectra.append(spectra_temp)
+            spectra_tar.append(spectra_tar_temp)
+            print(f'spectra[-1].shape: {spectra[-1].shape}\n')
+
+    # Average over all predictions and Save results
+    results = {}
+    if analysis_dict['rmse']:
+        results['rmse_u_mean'] = np.mean(np.stack(rmse_u, axis=0), axis=0)
+        results['rmse_u_std'] = np.std(np.stack(rmse_u, axis=0), axis=0)
+        results['rmse_u_per_mean'] = np.mean(np.stack(rmse_u_per, axis=0), axis=0)
+        results['rmse_u_per_std'] = np.std(np.stack(rmse_u_per, axis=0), axis=0)
+        results['rmse_v_mean'] = np.mean(np.stack(rmse_v, axis=0), axis=0)
+        results['rmse_v_std'] = np.std(np.stack(rmse_v, axis=0), axis=0)
+        results['rmse_v_per_mean'] = np.mean(np.stack(rmse_v_per, axis=0), axis=0)
+        results['rmse_v_per_std'] = np.std(np.stack(rmse_v_per, axis=0), axis=0)
+    if analysis_dict['acc']:
+        results['acc_u_mean'] = np.mean(np.stack(acc_u, axis=0), axis=0)
+        results['acc_u_std'] = np.std(np.stack(acc_u, axis=0), axis=0)
+        results['acc_u_per_mean'] = np.mean(np.stack(acc_u_per, axis=0), axis=0)
+        results['acc_u_per_std'] = np.std(np.stack(acc_u_per, axis=0), axis=0)
+        results['acc_v_mean'] = np.mean(np.stack(acc_v, axis=0), axis=0)
+        results['acc_v_std'] = np.std(np.stack(acc_v, axis=0), axis=0)
+        results['acc_v_per_mean'] = np.mean(np.stack(acc_v_per, axis=0), axis=0)
+        results['acc_v_per_std'] = np.std(np.stack(acc_v_per, axis=0), axis=0)
+    if analysis_dict['spectra']:
+        results['spectra'] = np.mean(np.stack(spectra, axis=0), axis=0)          # [B=n_steps, k]
+        results['spectra_tar'] = np.mean(np.stack(spectra_tar, axis=0), axis=0)
+        results['wavenumbers'] = wavenumbers
+
+    if analysis_dict['video']:
+        inp, tar = next(iter(dataloader_video))
+        ic = inp[0].unsqueeze(dim=0)
+        n_steps = inp.shape[0]
+
+        pred = n_step_rollout(model, ic, n=n_steps)
+        pred = pred[1:]
+
+        pred = pred.squeeze().transpose(-1, -2).detach().cpu().numpy()
+        tar = tar.squeeze().transpose(-1, -2).detach().cpu().numpy()
+
+        make_video(pred, tar)
+
+    return results
+
+def plot_analysis(results, analysis_dict):
+
+    font = {'size': 14}
+    mpl.rc('font', **font)
+
+    if analysis_dict['rmse']:
+        # U
+        fig, ax = plt.subplots()
+        x = np.arange(1, 1+len(results['rmse_u_mean'])) # * 0.02 * 3
+        ax.plot(x, results['rmse_u_mean'], '-k', label='ML')
+        upper = results['rmse_u_mean'] + results['rmse_u_std']
+        lower = results['rmse_u_mean'] - results['rmse_u_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.plot(x, results['rmse_u_per_mean'], '--k', label='Persistence')
+        upper = results['rmse_u_per_mean'] + results['rmse_u_per_std']
+        lower = results['rmse_u_per_mean'] - results['rmse_u_per_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.set_ylabel('RMSE')
+        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_ylim([0, 3.5])
+        ax.set_xlim([0, 100])
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig('RMSE_U_' + run_num + '.svg')
+        # V
+        fig, ax = plt.subplots()
+        ax.plot(x, results['rmse_v_mean'], '-k', label='ML')
+        upper = results['rmse_v_mean'] + results['rmse_v_std']
+        lower = results['rmse_v_mean'] - results['rmse_v_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.plot(x, results['rmse_v_per_mean'], '--k', label='Persistence')
+        upper = results['rmse_v_per_mean'] + results['rmse_v_per_std']
+        lower = results['rmse_v_per_mean'] - results['rmse_v_per_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.set_ylabel('RMSE')
+        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_ylim([0, 3.5])
+        ax.set_xlim([0, 100])
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig('RMSE_V_' + run_num + '.svg')
+
+    if analysis_dict['acc']:
+        # U
+        fig, ax = plt.subplots()
+        x = np.arange(1, 1+len(results['acc_u_mean'])) #* 0.02 * 3
+        ax.plot(x, results['acc_u_mean'], '-k', label='ML')
+        upper = results['acc_u_mean'] + results['acc_u_std']
+        lower = results['acc_u_mean'] - results['acc_u_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.plot(x, results['acc_u_per_mean'], '--k', label='Persistence')
+        upper = results['acc_u_per_mean'] + results['acc_u_per_std']
+        lower = results['acc_u_per_mean'] - results['acc_u_per_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.set_ylabel('ACC')
+        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_ylim([-1, 1])
+        ax.set_xlim([0, 100])
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig('ACC_U_' + run_num + '.svg')
+        # V
+        fig, ax = plt.subplots()
+        ax.plot(x, results['acc_v_mean'], '-k', label='ML')
+        upper = results['acc_v_mean'] + results['acc_v_std']
+        lower = results['acc_v_mean'] - results['acc_v_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.plot(x, results['acc_v_per_mean'], '--k', label='Persistence')
+        upper = results['acc_v_per_mean'] + results['acc_v_per_std']
+        lower = results['acc_v_per_mean'] - results['acc_v_per_std']
+        ax.fill_between(x, lower, upper, color='k', alpha=0.1)
+        ax.set_ylabel('ACC')
+        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_ylim([-1, 1])
+        ax.set_xlim([0, 100])
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig('ACC_V_' + run_num + '.svg')
+
+    if analysis_dict['spectra']:
+        fig, ax = plt.subplots()
+        x = results['wavenumbers']
+        ax.plot(x, results['spectra_tar'][0], '-k', label='Truth')
+        for lead in analysis_dict['spectra_leadtimes']:
+            spec = results['spectra'][lead]
+            label = f'{lead+1}$\Delta t$ ({(lead+1) * 0.02 * 3:.2f})'
+            ax.plot(x, spec, label=label)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlabel('Wavenumbers')
+            ax.set_ylabel('Power')
+            ax.set_xlim([0.8, 200])
+            ax.set_ylim([10**(-9), 10])
+            ax.legend()
+            plt.tight_layout()
+            fig.savefig('Power_Spectra_' + run_num + '.svg')
 
 
-print(f'Starting Job.\n')
+def main(root_dir, model_filename, params_filename, test_length, num_tests, test_file_start_idx,
+        analysis_dict, test_length_climo=10000, test_length_video=500):
 
-# File paths
-root_dir = '/ocean/projects/atm170004p/dpatel9/ML_Weights/Base_Emulator/'
-model_filename = 'test9.pt'
-params_filename = 'test9_parameters.pkl'
+    # Read in params file
+    params_fp = os.path.join(root_dir, params_filename)
+    yaml = YAML(typ='safe')
+    with open(params_fp, 'r') as f:
+        params_temp = yaml.load(f)
+    
+    params = {}
+    for key, val in params_temp.items():
+        try:
+            params[key] = ast.literal_eval(val)
+        except:
+            params[key] = val
+    print(f'params: {params}\n')
 
-# Test parameters
-test_length = 6
-num_tests = 3
-target_steps = 1
-test_file_range = (350000, 350000+(test_length*num_tests)+target_steps-1)
+    # Initiate model and load weights
+    model_fp = os.path.join(root_dir, model_filename)
+    model = ViT(
+        img_size=params["img_size"],
+        patch_size=params["patch_size"],
+        num_frames=params["num_frames"],
+        tubelet_size=params["tubelet_size"],
+        in_chans=params["in_chans"],
+        encoder_embed_dim=params["encoder_embed_dim"],
+        encoder_depth=params["encoder_depth"],
+        encoder_num_heads=params["encoder_num_heads"],
+        decoder_embed_dim=params["decoder_embed_dim"],
+        decoder_depth=params["decoder_depth"],
+        decoder_num_heads=params["decoder_num_heads"],
+        mlp_ratio=params["mlp_ratio"],
+        num_out_frames=params["num_out_frames"]
+        )
+    ckpt_temp = torch.load(model_fp, map_location=torch.device('cpu'))['model_state']
+    ckpt = {}
+    for key, val in ckpt_temp.items():
+        key_new = key[7:]
+        ckpt[key_new] = val
+    
+    model.load_state_dict(ckpt)
+    model.eval()
 
-# ----- Read in parameter file as a python dictionary ----- #
-params_fp = os.path.join(root_dir, params_filename)
-with open(params_fp, 'rb') as f:
-    params = pickle.load(f)
-print(f'params: {params}\n')
-
-# ----- Load model ----- #
-model_fp = os.path.join(root_dir, model_filename)
-
-model = ViT(
-    img_size=params["img_size"],
-    patch_size=params["patch_size"],
-    num_frames=params["num_frames"],
-    tubelet_size=params["tubelet_size"],
-    in_chans=params["in_chans"],
-    encoder_embed_dim=params["encoder_embed_dim"],
-    encoder_depth=params["encoder_depth"],
-    encoder_num_heads=params["encoder_num_heads"],
-    decoder_embed_dim=params["decoder_embed_dim"],
-    decoder_depth=params["decoder_depth"],
-    decoder_num_heads=params["decoder_num_heads"],
-    mlp_ratio=params["mlp_ratio"],
-    norm_layer=params["norm_layer"],
-    num_out_frames=params["num_out_frames"]
-)
-model.load_state_dict(torch.load(model_fp, map_location=torch.device('cpu')))
-model.eval()
-
-# ----- Get test data ----- #
-dataloader, dataset = get_dataloader(data_dir=params["data_dir"],
+    # Initiate dataloaders
+    test_file_range = (test_file_start_idx, test_file_start_idx+(test_length*num_tests*params["target_step"])-1) #+params["target_step"])
+    dataloader, dataset = get_dataloader(data_dir=params["data_dir"],
                                     file_range=test_file_range,
                                     target_step=params["target_step"],
                                     batch_size=test_length,
                                     train=False,
-                                    num_workers=params["num_workers"],
+                                    stride=params["target_step"],
+                                    distributed=dist.is_initialized(),
+                                    num_frames=params["num_frames"],
+                                    num_out_frames=params["num_out_frames"],
+                                    num_workers=2,
+                                    pin_memory=params["pin_memory"])
+    test_file_range = (test_file_start_idx, test_file_start_idx+test_length_climo)
+    dataloader_climo, dataset_climo = get_dataloader(data_dir=params["data_dir"],
+                                    file_range=test_file_range,
+                                    target_step=1,
+                                    batch_size=test_length_climo,
+                                    train=False,
+                                    stride=1,
+                                    distributed=dist.is_initialized(),
+                                    num_frames=params["num_frames"],
+                                    num_out_frames=params["num_out_frames"],
+                                    num_workers=2,
+                                    pin_memory=params["pin_memory"])
+    test_file_range = (test_file_start_idx, test_file_start_idx+(test_length_video*params["target_step"])+params["target_step"])
+    dataloader_video, datasaet_video = get_dataloader(data_dir=params["data_dir"],
+                                    file_range=test_file_range,
+                                    target_step=params["target_step"],
+                                    batch_size=test_length_video,
+                                    train=False,
+                                    stride=params["target_step"],
+                                    distributed=dist.is_initialized(),
+                                    num_frames=params["num_frames"],
+                                    num_out_frames=params["num_out_frames"],
+                                    num_workers=2,
                                     pin_memory=params["pin_memory"])
 
-# ----- Get RMSE ----- #
-rmse, rmse_per, pred, target = get_avg_rmse(dataloader, model)
+    print(f'len(dataloader): {len(dataset)}')
+    print(f'len(dataloader_climo): {len(dataset_climo)}')
+    print(f'len(dataloader_video): {len(datasaet_video)}')
 
-# ----- Plot results ----- #
-# Plot rmse
-fig, ax = plt.subplots()
-ax.plot(rmse, '-k')
-ax.plot(rmse_per, '-g')
-fig_fname = 'RMSE' + ' ' + model_filename + '.png'
-fig.savefig(fig_fname)
+    results = perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict)
 
-# Plot single inference
-nplot = 6
-fig, ax = plt.subplots(figsize=[12,2], nrows=2, ncols=nplot, sharey=True)
-axs = ax.flatten()
-preds = pred.squeeze(dim=2)
-tars = target.squeeze(dim=2)
-xx, yy = np.meshgrid(np.arange(preds.shape[-2]), np.arange(preds.shape[-1]))
-for i in range(nplot):
-    axs[i].pcolor(xx, yy, preds[i][0], cmap=cm.coolwarm, linewidth=0, antialiased=False, vmin=-5, vmax=5)
-for i, step in enumerate(range(nplot, 2*nplot)):
-    axs[step].pcolor(xx, yy, tars[i][0], cmap=cm.coolwarm, linewidth=0, antialiased=False, vmin=-5, vmax=5)
-#fig.colorbar(surf, shrink=0.5, aspect=5)
-fig_fname = 'Predictions_' + model_filename + '.png'
-fig.savefig(fig_fname)
+    plot_analysis(results, analysis_dict)
+
+
+# ================================================================================ #
+
+# File Paths
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0004/'
+model_filename = 'training_checkpoints/best_ckpt.tar'
+params_filename = 'hyperparams.yaml'
+run_num = '0004'
+
+# Test Parameters
+test_length = 100    # will be batch size
+num_tests = 50
+#target_steps = 3
+#stride = target_steps
+test_file_start_idx = 350000 #, 300000+(test_length*num_tests)+target_steps)
+
+test_length_climo = 10000
+
+test_length_video = 500 #500
+
+# Analysis
+analysis_dict = {
+        'rmse': True,
+        'acc': True,
+        'spectra': True,
+        'video': True,
+        'spectra_leadtimes': [0, 4, 9, 39, 49],
+        'long_rollout_length': 500
+        }
+
+main(root_dir, model_filename, params_filename, test_length, num_tests, test_file_start_idx,
+        analysis_dict, test_length_climo=test_length_climo, test_length_video=test_length_video)
