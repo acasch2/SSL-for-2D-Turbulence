@@ -10,8 +10,13 @@ from py2d.convert import Omega2Psi, Psi2UV
 def get_dataloader(data_dir, file_range, target_step, batch_size, train, distributed, stride=1, 
                    num_frames=1, num_out_frames=1, num_workers=1, pin_memory=True):
 
-    dataset = TurbulenceDataset(data_dir=data_dir, file_range=file_range, target_step=target_step, 
-                                stride=stride, num_frames=num_frames, num_out_frames=num_out_frames)
+    if isinstance(data_dir, list) and len(data_dir)>1:
+        assert len(file_range) == len(data_dir), 'len(file_range) should be the same as len(data_dir)'
+        dataset = TurbulenceMultiDataset(data_dir=data_dir, file_range=file_range, target_step=target_step,
+                                         stride=stride, num_frames=num_frames, num_out_frames=num_out_frames)
+    else:
+        dataset = TurbulenceDataset(data_dir=data_dir, file_range=file_range, target_step=target_step, 
+                                    stride=stride, num_frames=num_frames, num_out_frames=num_out_frames)
 
     sampler = DistributedSampler(dataset, shuffle=train) if distributed else None
     if train and not distributed:
@@ -116,3 +121,27 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         data_tensor = torch.tensor(np.stack([U, V]), dtype=torch.float32)
 
         return data_tensor
+
+
+class TurbulenceMultiDataset(torch.utils.data.Dataset):
+    def __init__(self, data_dir, file_range, target_step, stride, num_frames, num_out_frames):
+
+        self.datasets = []
+        self.dlens = []
+        for i in range(data_dir):
+            dataset = TurbulenceDataset(data_dir[i], file_range[i], target_step, stride, num_frames,
+                                         num_out_frames)
+            self.datasets.append(dataset)
+            self.dlens.append(len(dataset))
+
+    def __len__(self):
+        return sum(self.dlens)
+
+    def __getitem__(self, idx):
+
+        cum_ids = np.cumsum(self.dlens)
+        a = (cum_ids - 1) >= idx
+        dset_idx = np.argwhere(a)[0]
+        sample_idx = idx - np.concatenate(([0], cum_ids))[dset_idx]
+
+        return self.datasets[dset_idx][sample_idx]

@@ -35,10 +35,16 @@ def n_step_rollout(model, ic, n=1):
     Returns:
         pred: [B=n, C, T, X, Y] n-step model prediction (time along dim=0)."""
 
-    pred = [ic]
+    pred = []
     with torch.no_grad():
-        for i in range(n):
-            pred.append(model(pred[-1]))
+        if ic.shape[2] > 1:
+            for i in range(n):
+                pred.append(model(ic))          
+                ic = torch.cat([pred[-1], ic[:,:,:-1,:,:]], dim=2)
+        else:
+            for i in range(n):
+                pred.append(model(ic))
+                ic = pred[-1]
 
     pred = torch.cat(pred, dim=0)
 
@@ -186,11 +192,12 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         print(f'Prediction iteration: {i}\n')
         inputs, targets = batch
         ic = inputs[0].unsqueeze(dim=0)
+        print(f'ic.shape: {ic.shape}')
         n_steps = inputs.shape[0]
 
         pred = n_step_rollout(model, ic, n=n_steps)
-        pred = pred[1:]  # remove ic
-        per_pred = inputs[0].repeat(n_steps, 1, 1, 1, 1)
+        #pred = pred[1:]  # remove ic
+        per_pred = inputs[0].repeat(n_steps, 1, 1, 1, 1)[:,:,0,:,:]
 
         print(f'pred.shape: {pred.shape}')                                      # should be: [B=n_steps, C, T=1, X, Y]
         print(f'per_pred.shape: {per_pred.shape}')
@@ -430,8 +437,8 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
                                     train=False,
                                     stride=1,
                                     distributed=dist.is_initialized(),
-                                    num_frames=params["num_frames"],
-                                    num_out_frames=params["num_out_frames"],
+                                    num_frames=1, #params["num_frames"],
+                                    num_out_frames=1, #params["num_out_frames"],
                                     num_workers=2,
                                     pin_memory=params["pin_memory"])
     test_file_range = (test_file_start_idx, test_file_start_idx+(test_length_video*params["target_step"])+params["target_step"])
@@ -447,9 +454,9 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
                                     num_workers=2,
                                     pin_memory=params["pin_memory"])
 
-    print(f'len(dataloader): {len(dataset)}')
-    print(f'len(dataloader_climo): {len(dataset_climo)}')
-    print(f'len(dataloader_video): {len(datasaet_video)}')
+    print(f'len(dataset): {len(dataset)}')
+    print(f'len(dataset_climo): {len(dataset_climo)}')
+    print(f'len(dataset_video): {len(datasaet_video)}')
 
     results = perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict)
 
@@ -459,17 +466,15 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0004/'
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0011/'
 model_filename = 'training_checkpoints/best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = '0004'
+run_num = 'base_0011'
 
 # Test Parameters
 test_length = 100    # will be batch size
-num_tests = 50
-#target_steps = 3
-#stride = target_steps
-test_file_start_idx = 350000 #, 300000+(test_length*num_tests)+target_steps)
+num_tests = 25
+test_file_start_idx = 350000 
 
 test_length_climo = 10000
 
