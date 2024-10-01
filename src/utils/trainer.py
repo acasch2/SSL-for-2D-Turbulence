@@ -155,12 +155,14 @@ class Trainer():
 
 
     def train(self):
+        # Iterate over all epocs
         if self.params["log_to_screen"]:
             logging.info("Starting training loop ...")
 
         best_valid_loss = 1.e6
         early_stopping_counter = 0
         early_stop_epoch_triggered = False
+
         for epoch in range(self.params["max_epochs"]):
             
             if self.early_stop_epoch is not None and epoch > self.early_stop_epoch:
@@ -175,7 +177,7 @@ class Trainer():
 
             start = time.time()
 
-            tr_time, data_time, train_logs = self.train_one_epoch()
+            tr_time, data_time, train_logs = self.train_one_epoch() # Train one epoch
             valid_time, valid_logs = self.validate_one_epoch()
 
             # Adjust lr rate schedule if using
@@ -278,6 +280,8 @@ class Trainer():
             tr_time += time.time() - tr_start
 
             with torch.no_grad():
+                # Computations within the track wont be tracked
+                # Loggings in Weights and biases
                 if self.params.diagnostic_logs:
                     diagnostic_logs['batch_grad_norm'] = torch.tensor([grad_norm(self.model)]).to(self.device)
                     diagnostic_logs['batch_grad_max'] = torch.tensor([grad_max(self.model)]).to(self.device)

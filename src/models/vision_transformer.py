@@ -27,10 +27,10 @@ class ViT(nn.Module):
       decoder_embed_dim=192,
       decoder_depth=6,
       decoder_num_heads=6,
-      mlp_ratio=4.,
+      mlp_ratio=4., 
       norm_layer=nn.LayerNorm,
       num_out_frames=1,
-      checkpointing=None
+      checkpointing=None # gradient checkpointing
   ):
       super().__init__()
 

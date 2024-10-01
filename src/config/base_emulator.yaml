@@ -2,43 +2,45 @@
 BASE: &BASE
     data_dir: '/scratch/group/p.atm170020.000/2DTurbData/results/Re5000_fkx4fky4_r0.1_b20.0/NoSGS/NX256/dt0.0002_IC1/data/'
 
+    # Infor of runs and directories
     exp_dir: '/scratch/user/u.dp200518/SSL-2DTurb/'
 
+    # Login for Weights and biases
     log_to_screen: !!bool True
     log_to_wandb: !!bool True
-    project: 'SSL-2DTurb'
+    project: 'SSL-2DTurb' # 
     group: 'Dhruvit-base-emulator'
     name: '0008'
 
     diagnostic_logs: !!bool True
 
-    fresh_start: True
-    early_stopping: !!bool False
+    fresh_start: True # Training from checkpoint vs start (Need to test if it resumes at checkpoint)
+    early_stopping: !!bool False # Not implemented
 
-    save_checkpoint: !!bool True
+    save_checkpoint: !!bool True # Two checkoiunts to save model weights: best and last epoc
 
     train_file_range: [200000, 220000]
     valid_file_range: [310000, 312000]
-    batch_size: 32 
-    target_step: 3
-    num_workers: 8
+    batch_size: 32 # Global batch size (not per GPU)
+    target_step: 3 # Number of time steps to predict in the future (prediction time step = target_step * saved time step)
+    num_workers: 8 # Number of workers for data loader per GPU (no imporvement after 2)
     pin_memory: !!bool True
 
     gpu: !!bool True
     lr: 5e-4
-    scheduler: 'ReduceLROnPlateau'
-    warmup: !!bool True
+    scheduler: 'ReduceLROnPlateau' # 'CosineAnnealingLR' 'ReduceLROnPlateau'
+    warmup: !!bool True # Warmup for LR scheduler (Start with low LR and then increase)
     warmup_startfactor: 0.001 
-    warmup_totaliters: 3
-    weight_decay: 1e-6
+    warmup_totaliters: 3 # Warm-up learning rate for the first N epochs
+    weight_decay: 1e-6 # Regularization term for loss function (L2 norm)
     max_epochs: 500
-    checkpointing: !!bool False #True
+    checkpointing: !!bool False # True : For large models gradinet checkpointing is used to save memory (slows down upto 2 or so) May need to increase for patch size = 2
 
     img_size: 256
     patch_size: 4
-    num_frames: 3 #1
-    tubelet_size: 3 #1
-    in_chans: 2
+    num_frames: 1 # Number of frames to consider for input (t, t-\deltat, t-2\deltat)
+    tubelet_size: 3 # Number of frames to consider for input imbedding - multiple timesteps are included in the same frame
+    in_chans: 2 # Number of input channels (u, v)
     encoder_embed_dim: 96 #192
     encoder_depth: 4 #6
     encoder_num_heads: 4 #6
@@ -46,9 +48,9 @@ BASE: &BASE
     decoder_depth: 4 #6
     decoder_num_heads: 4 #6
     mlp_ratio: 4.
-    num_out_frames: 1
+    num_out_frames: 1 # Numebr of output frames (time steps) to predict
 
-    mae_finetune: False
-    mae_finetune_fp: '/scratch/user/u.dp200518/ML_Weights/MAE_Pretrain/TS0_NF1_LRSNone_200epochs_small.pt'
-    freeze_layers: ['encoder']
+    # mae_finetune: False
+    # mae_finetune_fp: '/scratch/user/u.dp200518/ML_Weights/MAE_Pretrain/TS0_NF1_LRSNone_200epochs_small.pt'
+    # freeze_layers: ['encoder']
 
