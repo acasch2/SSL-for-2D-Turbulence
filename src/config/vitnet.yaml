@@ -8,7 +8,7 @@ BASE: &BASE
     log_to_wandb: !!bool True
     project: 'SSL-2DTurb'
     group: 'Dhruvit-base-emulator'
-    name: '0012'
+    name: '0001'
 
     diagnostic_logs: !!bool True
 
@@ -17,7 +17,7 @@ BASE: &BASE
 
     save_checkpoint: !!bool True
 
-    train_file_range: [200000, 202000]
+    train_file_range: [200000, 220000]
     valid_file_range: [310000, 312000]
     batch_size: 32 
     target_step: 3
@@ -31,8 +31,10 @@ BASE: &BASE
     warmup_startfactor: 0.001 
     warmup_totaliters: 3
     weight_decay: 1e-6
-    max_epochs: 50000 #500
+    max_epochs: 500
     checkpointing: !!bool False #True
+
+    train_tendencies: !!bool False #True
 
     img_size: 256
     patch_size: 4
@@ -48,9 +50,41 @@ BASE: &BASE
     mlp_ratio: 4.
     num_out_frames: 1
 
-    train_tendencies: !!bool True
-
     mae_finetune: False
     mae_finetune_fp: '/scratch/user/u.dp200518/ML_Weights/MAE_Pretrain/TS0_NF1_LRSNone_200epochs_small.pt'
     freeze_layers: ['encoder']
 
+
+
+MAE_PRETRAIN: &MAE_PRETRAIN
+    <<: *BASE
+
+    target_step: 0
+
+    train_tendencies: !!bool False
+
+    num_frames: 3
+    tubelet_size: 3
+    num_out_frames: 3  
+
+    mask_ratio: 0.75
+
+
+
+MAE_FINETUNE: &MAE_FINETUNE
+    <<: *BASE
+
+    project: 'SSL-2DTurb'
+    group: 'Dhruvit-MAE-finetune'
+    name: '0004'
+
+    train_file_range: [200000, 202000]
+    
+    batch_size: 32
+    max_epochs: 5000
+
+    train_tendencies: !!bool False
+
+    mae_finetune: True
+    mae_finetune_fp: '/scratch/user/u.dp200518/SSL-2DTurb/MAE_PRETRAIN/0001/training_checkpoints/best_ckpt.tar'
+    freeze_layers: [] # ['encoder']   

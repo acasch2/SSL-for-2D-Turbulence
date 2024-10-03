@@ -270,7 +270,17 @@ class Trainer():
             
             #outputs = self.model(inputs, train=True)
             #loss = self.model.module.forward_loss(labels, outputs)
-            loss, _, _ = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=True)
+
+            if self.params["train_tendencies"]:
+                labels -= inputs
+
+            pred, mask = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=True)
+
+            if dist.is_initialized():
+                loss = self.model.module.forward_loss(labels, pred, mask)
+            else:
+                loss = self.model.forward_loss(labels, pred, mask)
+            #loss, _, _ = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=True)
 
             loss.backward()
 
@@ -344,7 +354,16 @@ class Trainer():
 
                 #outputs = self.model(inputs, train=False)
                 #loss = self.model.module.forward_loss(labels, outputs)
-                loss, outputs, _ = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=False)
+
+                if self.params["train_tendencies"]:
+                    labels -= inputs
+
+                pred, mask = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=False)
+
+                if dist.is_initialized():
+                    loss = self.model.module.forward_loss(labels, pred, mask)
+                else:
+                    loss = self.model.forward_loss(labels, pred, mask)
 
                 # check valid pred
                 self.val_pred = outputs

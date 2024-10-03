@@ -25,7 +25,7 @@ from src.utils.data_loaders import get_dataloader
 
 # ================================================================================ #
 
-def n_step_rollout(model, ic, n=1):
+def n_step_rollout(model, ic, n=1, train_tendencies=False):
     """Produce an n-step forward roll-out
     prediction.
     Args:
@@ -37,14 +37,31 @@ def n_step_rollout(model, ic, n=1):
 
     pred = []
     with torch.no_grad():
-        if ic.shape[2] > 1:
-            for i in range(n):
-                pred.append(model(ic))          
-                ic = torch.cat([pred[-1], ic[:,:,:-1,:,:]], dim=2)
+        idx = torch.tensor([0])
+        if train_tendencies:
+            # WARNING: if num_out_frames > 1, only top frame is kept in auto-regressive rollout
+            if ic.shape[2] > 1:
+                for i in range(n):
+                    # Use index_select to prevent reducing along dim of size 1
+                    pred_temp = torch.index_select(ic, 2, index=idx) + torch.index_select(model(ic), 2, index=idx)
+                    pred.append(pred_temp)
+                    ic = torch.cat([pred_temp, ic[:,:,:-1,:,:]], dim=2)
+            else:
+                for i in range(n):
+                    pred_temp = ic + torch.index_select(model(ic), 2, index=idx)
+                    pred.append(pred_temp)
+                    ic = pred_temp
         else:
-            for i in range(n):
-                pred.append(model(ic))
-                ic = pred[-1]
+            if ic.shape[2] > 1:
+                for i in range(n):
+                    pred_temp = torch.index_select(model(ic), 2, index=idx)
+                    pred.append(pred_temp)          
+                    ic = torch.cat([pred_temp, ic[:,:,:-1,:,:]], dim=2)
+            else:
+                for i in range(n):
+                    pred_temp = torch.index_select(model(ic), 2, index=idx)
+                    pred.append(pred_temp)
+                    ic = pred_temp
 
     pred = torch.cat(pred, dim=0)
 
@@ -168,7 +185,7 @@ def make_video(pred, tar):
 
     imageio.mimsave(f'Video_' + run_num + '.gif', frames, fps=5)
 
-def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict):
+def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict, params):
     """
     Returns:
         results: dictionary of {'rmse','rmse_per','acc','acc_per','spectra'}
@@ -195,7 +212,7 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         print(f'ic.shape: {ic.shape}')
         n_steps = inputs.shape[0]
 
-        pred = n_step_rollout(model, ic, n=n_steps)
+        pred = n_step_rollout(model, ic, n=n_steps) #, train_tendencies=params["train_tendencies"])
         #pred = pred[1:]  # remove ic
         per_pred = inputs[0].repeat(n_steps, 1, 1, 1, 1)[:,:,0,:,:]
 
@@ -458,7 +475,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
     print(f'len(dataset_climo): {len(dataset_climo)}')
     print(f'len(dataset_video): {len(datasaet_video)}')
 
-    results = perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict)
+    results = perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict, params)
 
     plot_analysis(results, analysis_dict)
 
@@ -466,10 +483,10 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0011/'
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0004/'
 model_filename = 'training_checkpoints/best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = 'base_0011'
+run_num = 'TEST' #'base_0011'
 
 # Test Parameters
 test_length = 100    # will be batch size

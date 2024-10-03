@@ -277,6 +277,10 @@ class Trainer():
             #    with record_function("model inference"):
             
             outputs = self.model(inputs, train=True)
+            
+            if self.params["train_tendencies"]:
+                labels -= inputs
+
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
             else:
@@ -353,6 +357,10 @@ class Trainer():
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
                 outputs = self.model(inputs, train=False)
+
+                if self.params["train_tendencies"]:
+                    labels -= inputs
+
                 if dist.is_initialized():
                     loss = self.model.module.forward_loss(labels, outputs)
                 else:

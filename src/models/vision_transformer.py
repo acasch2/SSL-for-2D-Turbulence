@@ -156,6 +156,7 @@ class ViT(nn.Module):
       img: B, C, T, H, W
       pred: B, C, T, H, W
       """
+
       loss = (pred - img) ** 2
       loss = loss.mean()
 
