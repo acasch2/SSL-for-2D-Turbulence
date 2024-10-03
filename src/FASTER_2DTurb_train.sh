@@ -1,11 +1,12 @@
 #!/bin/bash
 #SBATCH --time=4-00:00:00
-#SBATCH --ntasks=2
+#SBATCH -N 1
+#SBATCH --ntasks=8
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=248G
+#SBATCH --mem=250G
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a10:2
-#SBATCH --output=/scratch/user/u.dp200518/Logfiles/2DTurb_Pretrain_%x.out
+#SBATCH --gres=gpu:t4:8
+#SBATCH --output=/scratch/user/u.dp200518/Logfiles/2DTurb_Base_%x.out
 
 #SBATCH --account=145439188689
 
@@ -31,10 +32,10 @@ source $HOME/set_wandb_key_dpp94.sh
 
 # ------ Define all input args ------ #
 
-YAML_CONFIG=/home/u.dp200518/SSL-Wavelets/src/config/mae_pretrain.yaml
-CONFIG=MAE_PRETRAIN
+YAML_CONFIG=/home/u.dp200518/SSL-Wavelets/src/config/vitnet.yaml
+CONFIG=BASE
 
 
 # ------ Run main script ------ #
 
-torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} mae_pretrain.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start
+torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} train.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start

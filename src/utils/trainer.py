@@ -78,14 +78,22 @@ class Trainer():
 
         # If finetuning, load pre-trained model weights
         if params["mae_finetune"]:
-            checkpoint_model = torch.load(params["mae_finetune_fp"], map_location='cpu')
+            checkpoint_model_temp = torch.load(params["mae_finetune_fp"], map_location='cpu')['model_state']
+            checkpoint_model = {}
+            for key, val in checkpoint_model_temp.items():
+                key_new = key[7:]                  # Removing 'module.' that is appended before each key by DDP
+                checkpoint_model[key_new] = val
 
             print(f"Load pre-trained checkpoint from: {params['mae_finetune_fp']}")
             state_dict = self.model.state_dict()
-            for k in ['head.weights', 'head.bias']:
-                if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
-                    print(f"Removing key {k} from pretrained checkpoint.")
-                    del checkpoint_model[k]
+            #for k in ['head.weights', 'head.bias']:
+            #    if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
+            #        print(f"Removing key {k} from pretrained checkpoint.")
+            #        del checkpoint_model[k]
+            for key, val in state_dict.items():
+                if key in checkpoint_model.keys() and val.shape != checkpoint_model[key].shape:
+                    print(f'Removing key {key} from pretrained checkpoint.')
+                    del checkpoint_model[key]
 
             msg = self.model.load_state_dict(checkpoint_model, strict=False)
             print(msg)
@@ -113,8 +121,8 @@ class Trainer():
         if dist.is_initialized():
             self.model = DistributedDataParallel(self.model,
                                                  device_ids=[params.local_rank],
-                                                 output_device=[params.local_rank]) #,
-                                                 #find_unused_parameters=True)
+                                                 output_device=[params.local_rank],
+                                                 find_unused_parameters=True)
        
 
         self.iters = 0
@@ -271,6 +279,9 @@ class Trainer():
             #    with record_function("model inference"):
             
             outputs = self.model(inputs, train=True)
+            
+            if self.params["train_tendencies"]:
+                labels -= inputs
 
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
@@ -350,11 +361,14 @@ class Trainer():
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
                 outputs = self.model(inputs, train=False)
-                
+
+                if self.params["train_tendencies"]:
+                    labels -= inputs
+
                 if dist.is_initialized():
                     loss = self.model.module.forward_loss(labels, outputs)
                 else:
-                    loss = self.module.forward_loss(labels, outputs)
+                    loss = self.model.forward_loss(labels, outputs)
 
                 # check valid pred
                 self.val_pred = outputs

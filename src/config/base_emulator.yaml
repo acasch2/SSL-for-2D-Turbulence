@@ -53,6 +53,8 @@ BASE: &BASE
     mlp_ratio: 4.
     num_out_frames: 1 # Numebr of output frames (time steps) to predict
 
+    train_tendencies: !!bool True
+
     mae_finetune: False
     # mae_finetune_fp: '/scratch/user/u.dp200518/ML_Weights/MAE_Pretrain/TS0_NF1_LRSNone_200epochs_small.pt'
     # freeze_layers: ['encoder']

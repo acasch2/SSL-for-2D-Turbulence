@@ -188,6 +188,7 @@ class MAEViT(nn.Module):
       pred: B, C, T, H, W
       mask: B, L, D
       """
+
       tar = self.patchify(img)
 
       loss = (pred - tar) ** 2
@@ -200,6 +201,6 @@ class MAEViT(nn.Module):
   def forward(self, x, mask_ratio=0.75, train=False):
       latent, mask, ids_restore = self.forward_encoder(x, mask_ratio, train=train)
       pred = self.forward_decoder(latent, ids_restore, train=train)
-      loss = self.forward_loss(x, pred, mask)
+      #loss = self.forward_loss(x, pred, mask)
 
-      return loss, pred, mask
+      return pred, mask
