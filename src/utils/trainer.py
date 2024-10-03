@@ -271,13 +271,17 @@ class Trainer():
             #    with record_function("model inference"):
             
             outputs = self.model(inputs, train=True)
-            loss = self.model.module.forward_loss(labels, outputs)
+
+            if dist.is_initialized():
+                loss = self.model.module.forward_loss(labels, outputs)
+            else:
+                loss = self.model.forward_loss(labels, outputs)
 
             loss.backward()
 
             self.optimizer.step()
 
-            tr_time += time.time() - tr_start
+            tr_time += time.tim_e() - tr_start
 
             with torch.no_grad():
                 # Computations within the track wont be tracked
@@ -346,7 +350,11 @@ class Trainer():
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
                 outputs = self.model(inputs, train=False)
-                loss = self.model.module.forward_loss(labels, outputs)
+                
+                if dist.is_initialized():
+                    loss = self.model.module.forward_loss(labels, outputs)
+                else:
+                    loss = self.module.forward_loss(labels, outputs)
 
                 # check valid pred
                 self.val_pred = outputs
