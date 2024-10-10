@@ -11,7 +11,7 @@ BASE: &BASE
     log_to_wandb: !!bool True
     project: '2DTurb-FouRKS' # 
     group: 'base-emulator'
-    name: 'test'
+    name: 'base'
 
     diagnostic_logs: !!bool True
 
@@ -29,6 +29,7 @@ BASE: &BASE
     num_workers: 2 # Number of workers for data loader per GPU (no imporvement after 2)
     pin_memory: !!bool True
 
+
     gpu: !!bool True
     lr: 5e-4
     scheduler: 'ReduceLROnPlateau' # 'CosineAnnealingLR' 'ReduceLROnPlateau'
@@ -38,6 +39,12 @@ BASE: &BASE
     weight_decay: 1e-6 # Regularization term for loss function (L2 norm)
     max_epochs: 400
     checkpointing: !!bool False # True : For large models gradinet checkpointing is used to save memory (slows down upto 2 or so) May need to increase for patch size = 2
+
+    integrator: null # 'null' 'E1' 'RK2' 'RK4' None, Euler 1st order, Runge-Kutta 2nd order, Runge-Kutta 4th order
+
+    spectral_loss: !!bool False # True: Use spectral loss for training
+    spectral_loss_weight: 1 # Weight (Regularizer Coefficient) for spectral loss
+    spectral_loss_threshold_wavenumber: 50 # Threshold wavenumber for spectral loss
 
     img_size: 256
     patch_size: 4
@@ -53,7 +60,7 @@ BASE: &BASE
     mlp_ratio: 4.
     num_out_frames: 1 # Numebr of output frames (time steps) to predict
 
-    train_tendencies: !!bool True
+    train_tendencies: !!bool False # Training neural netwrok on difference of X(t+dt) - X(t) = Tendencies
 
     mae_finetune: False
     # mae_finetune_fp: '/scratch/user/u.dp200518/ML_Weights/MAE_Pretrain/TS0_NF1_LRSNone_200epochs_small.pt'
