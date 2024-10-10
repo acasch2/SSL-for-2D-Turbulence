@@ -128,6 +128,9 @@ class ViT(nn.Module):
           x = checkpoint(self.norm, x, use_reentrant=False)
       else:
           x = self.norm(x)
+          
+        
+
 
       return x
 
@@ -159,6 +162,23 @@ class ViT(nn.Module):
 
       loss = (pred - img) ** 2
       loss = loss.mean()
+
+      return loss 
+  
+  def spectral_loss(self, img, pred, weight, threshold_wavenumber):
+      """
+      img: B, C, T, H, W
+      pred: B, C, T, H, W
+      """
+      # Calculating zonal fft and averageing
+      img_hat = torch.mean(torch.abs(torch.fft.rfft(img,dim=3)),dim=4)
+      pred_hat = torch.mean(torch.abs(torch.fft.rfft(pred,dim=3)),dim=4)
+
+        # Loss for both channels
+      loss1 = (pred_hat[:,0,:,threshold_wavenumber:]-img_hat[:,0,:,threshold_wavenumber:]) ** 2
+      loss2 = (pred_hat[:,1,:,threshold_wavenumber:]-img_hat[:,1,:,threshold_wavenumber:]) ** 2
+
+      loss = weight*0.5*(loss1.mean() + loss2.mean())
 
       return loss
 
