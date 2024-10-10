@@ -9,7 +9,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from utils.diagnostics import grad_norm, grad_max
-#from torch.profiler import profile, record_function, ProfilerActivity
+# from torch.profiler import profile, record_function, ProfilerActivity
 
 #torch.backends.cuda.enable_flash_sdp(True)
 
@@ -274,25 +274,39 @@ class Trainer():
             self.model.zero_grad()
             self.optimizer.zero_grad(set_to_none=True)
 
-            # Profile
-            #with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
+            # # Profile
+            # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
             #    with record_function("model inference"):
             
-            outputs = self.model(inputs, train=True)
+            if self.params['integrator'] == 'E1':
+                outputs = self.E1_integrator(inputs, train=True)
+            elif self.params['integrator'] == 'RK2':
+                outputs = self.RK2_integrator(inputs, train=True)
+            elif self.params['integrator'] == 'RK4':
+                outputs = self.RK4_integrator(inputs, train=True)
+                print('************* RK4 *************')
+            else:
+                outputs = self.model(inputs, train=True)
             
             if self.params["train_tendencies"]:
                 labels -= inputs
 
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
+
+                if self.params['spectral_loss']:
+                    loss += self.model.module.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
             else:
                 loss = self.model.forward_loss(labels, outputs)
+
+                if self.params['spectral_loss']:
+                    loss += self.model.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
 
             loss.backward()
 
             self.optimizer.step()
 
-            tr_time += time.tim_e() - tr_start
+            tr_time += time.time() - tr_start
 
             with torch.no_grad():
                 # Computations within the track wont be tracked
@@ -316,8 +330,8 @@ class Trainer():
             
             torch.cuda.empty_cache()
 
-            #print(f'=============== PROFILER ==============\n')
-            #print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+            # print(f'=============== PROFILER ==============\n')
+            # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
         if self.params.diagnostic_logs:
             with torch.no_grad():
@@ -360,15 +374,30 @@ class Trainer():
 
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
-                outputs = self.model(inputs, train=False)
+
+                if self.params['integrator'] == 'E1':
+                    outputs = self.E1_integrator(inputs, train=False)
+                elif self.params['integrator'] == 'RK2':
+                    outputs = self.RK2_integrator(inputs, train=False)
+                elif self.params['integrator'] == 'RK4':
+                    outputs = self.RK4_integrator(inputs, train=False)
+
+                else:
+                    outputs = self.model(inputs, train=False)
 
                 if self.params["train_tendencies"]:
                     labels -= inputs
 
                 if dist.is_initialized():
                     loss = self.model.module.forward_loss(labels, outputs)
+
+                    if self.params['spectral_loss']:
+                        loss += self.model.module.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
                 else:
                     loss = self.model.forward_loss(labels, outputs)
+
+                    if self.params['spectral_loss']:
+                        loss += self.model.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
 
                 # check valid pred
                 self.val_pred = outputs
@@ -415,3 +444,35 @@ class Trainer():
         print(f'START EPOCH:', self.startEpoch)
         if self.params.resuming:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    def E1_integrator(self, input, train=False):
+        """
+        input: B, C, T, H, W
+        """
+        k1 = self.model(input, train=train)
+        
+        return input + k1
+
+
+    def RK2_integrator(self, input, train=False):
+        """
+        input: B, C, T, H, W
+        """
+        k1 = self.model(input, train=train)
+        k2 = self.model(input + k1, train=train)
+    
+        return input + 0.5 * (k1 + k2)
+
+
+    def RK4_integrator(self, input, train=False):
+        """
+        input: B, C, T, H, W
+        Note: https://arxiv.org/abs/2304.07029
+        "Long-term instabilities of deep learning-based digital twins of the climate system: The cause and a solution"
+        """
+        k1 = self.model(input, train=train)
+        k2 = self.model(input + 0.5 * k1, train=train) 
+        k3 = self.model(input + 0.5 * k2, train=train)
+        k4 = self.model(input + k3, train=train)
+    
+        return input + 1/6 * (k1 + 2*k2 + 2*k3 + k4)
