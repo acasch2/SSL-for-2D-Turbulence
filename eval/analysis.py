@@ -7,7 +7,9 @@ import os
 import ast
 from scipy.io import loadmat
 import numpy as np
-from py2d.initialize import initialize_wavenumbers_rfft2
+from sklearn.decomposition import PCA
+from py2d.initialize import initialize_wavenumbers_rfft2, gridgen
+from py2d.derivative import derivative
 from py2d.convert import Omega2Psi, Psi2UV
 from matplotlib import pyplot as plt
 from matplotlib import cm
@@ -156,6 +158,53 @@ def get_spectra(U, V):
 
     return spectra, wavenumbers
 
+def get_zonal_PCA(data, n_comp=1):
+    """
+    Compute PCA of zonally-averaged fields.
+    Args:
+        data: [B=n_steps, X, Y] np.array of data
+    Returns:
+        pcs: [B, n_comp]
+        eofs: [n_comp, X]
+    """
+
+    # Zonally average data
+    zdata = np.mean(data, axis=2)
+    print(f'zdata.shape: {zdata.shape}')
+
+    # initiate PCA
+    pca = PCA(n_components=n_comp)
+
+    pcs = pca.fit_transform(zdata)  # [B, n_comp]
+    eofs = pca.components_          # [n_comp, X]
+    print(f'pcs.shape: {pcs.shape}')
+    print(f'eofs.shape: {eofs.shape}')
+
+    return pcs, eofs
+
+def get_div(U, V):
+    """
+    Args:
+        U: [B=n_steps, X, Y] 
+        V: [B=n_steps, X, Y]
+    Returns:
+        div: [B,] divergence vs time
+    """
+    
+    Lx, Ly = 2*np.pi, 2*np.pi
+    Nx, Ny = U.shape[1], U.shape[2]
+    Lx, Ly, X, Y, dx, dy = gridgen(Lx, Ly, Nx, Ny, INDEXING='ij')
+
+    Kx, Ky, Kabs, Ksq, invKsq = initialize_wavenumbers_rfft2(Nx, Ny, Lx, Ly, INDEXING='ij')
+
+    div = []
+    for i in range(U.shape[0]):
+        Dx = derivative(U[i,:,:], [1,0], Kx, Ky, spectral=False)
+        Dy = derivative(V[i,:,:], [0,1], Kx, Ky, spectral=False)
+        div.append(np.mean(np.abs(Dx + Dy)))
+
+    return np.array(div)
+
 def make_video(pred, tar):
     """
     Args:
@@ -177,7 +226,7 @@ def make_video(pred, tar):
         fig.subplots_adjust(right=0.85)
         cbar_ax = fig.add_axes([0.9, 0.15, 0.05, 0.7])
         fig.colorbar(im, cax=cbar_ax)
-        fig.suptitle(f'Timestep: {t+1}')
+        fig.suptitle(f'{t+1}$\Delta t$')
         fig.savefig('temp_frame.png', bbox_inches='tight')
         plt.close()
 
@@ -277,18 +326,46 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         results['spectra_tar'] = np.mean(np.stack(spectra_tar, axis=0), axis=0)
         results['wavenumbers'] = wavenumbers
 
-    if analysis_dict['video']:
+    long_analysis = any([analysis_dict['video'], analysis_dict['zonal_pca'], analysis_dict['div']])
+    if long_analysis:
         inp, tar = next(iter(dataloader_video))
         ic = inp[0].unsqueeze(dim=0)
         n_steps = inp.shape[0]
 
-        pred = n_step_rollout(model, ic, n=n_steps)
-        pred = pred[1:]
+        pred = n_step_rollout(model, ic, n=n_steps) #, train_tendencies=params["train_tendencies"])
+        #pred = pred[1:]
 
         pred = pred.squeeze().transpose(-1, -2).detach().cpu().numpy()
         tar = tar.squeeze().transpose(-1, -2).detach().cpu().numpy()
 
-        make_video(pred, tar)
+        pred_u = pred[:,0,:,:]
+        pred_v = pred[:,1,:,:]
+        tar_u = tar[:,0,:,:]
+        tar_v = tar[:,1,:,:]
+
+        if analysis_dict['video']:
+            print(f'Making long roll-out video.')
+            make_video(pred, tar)
+
+        if analysis_dict['zonal_pca']:
+            pred_u_pc, pred_u_eof = get_zonal_PCA(pred_u,
+                                                    n_comp=analysis_dict['pca_ncomp'])
+            tar_u_pc, tar_u_eof = get_zonal_PCA(tar_u,
+                                                    n_comp=analysis_dict['pca_ncomp'])
+            print(f'pred_u_pc.shape: {pred_u_pc.shape}\n')
+            print(f'pred_u_eof.shape: {pred_u_eof.shape}\n')
+            
+            results['pred_u_pc'] = pred_u_pc
+            results['pred_u_eof'] = pred_u_eof
+            results['tar_u_pc'] = tar_u_pc
+            results['tar_u_eof'] = tar_u_eof
+
+        if analysis_dict['div']:
+            pred_div = get_div(pred_u, pred_v)
+            tar_div = get_div(tar_u, tar_v)
+
+            results['pred_div'] = pred_div
+            results['tar_div'] = tar_div
 
     return results
 
@@ -377,7 +454,7 @@ def plot_analysis(results, analysis_dict):
         ax.plot(x, results['spectra_tar'][0], '-k', label='Truth')
         for lead in analysis_dict['spectra_leadtimes']:
             spec = results['spectra'][lead]
-            label = f'{lead+1}$\Delta t$ ({(lead+1) * 0.02 * 3:.2f})'
+            label = f'{lead+1}$\Delta t$' # ({(lead+1) * 0.02 * 3:.2f})'
             ax.plot(x, spec, label=label)
             ax.set_xscale('log')
             ax.set_yscale('log')
@@ -389,6 +466,36 @@ def plot_analysis(results, analysis_dict):
             plt.tight_layout()
             fig.savefig('Power_Spectra_' + run_num + '.svg')
 
+    if analysis_dict['zonal_pca']:
+        # Plot EOFs
+        pred_u_pcs = results['pred_u_pc']
+        pred_u_eofs = results['pred_u_eof']
+        tar_u_pcs = results['tar_u_pc']
+        tar_u_eofs = results['tar_u_eof']
+        eofs = [pred_u_eofs, tar_u_eofs]
+        colors = ['k', 'r', 'b', 'g']
+        x = np.linspace(0, 2*np.pi, pred_u_eofs.shape[1])
+        for i in range(pred_u_eofs.shape[0]):
+            fig, ax = plt.subplots()
+            ax.plot(pred_u_eofs[i, :], x, f'--{colors[i]}', label=f'ML EOF{i+1}')
+            ax.plot(tar_u_eofs[i, :], x, f'-{colors[i]}', label=f'Truth EOF{i+1}')
+            ax.set_xlim([-0.25, 0.25])
+            ax.set_ylabel('x')
+            ax.set_title(f'EOF{i+1} of zonally-averaged U')
+            ax.legend()
+            plt.tight_layout()
+            fig.savefig(f'EOF{i+1}_' + run_num + '.svg')
+
+    if analysis_dict['div']:
+        fig, ax = plt.subplots()
+        x = np.arange(1, 1+results['pred_div'].shape[0])
+        ax.plot(x, results['pred_div'], '--k', label='ML')
+        ax.plot(x, results['tar_div'], '-k', label='ML')
+        ax.set_xlabel('ML timestep')
+        ax.set_ylim([-1, 1])
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig('Div_' + run_num + '.svg')
 
 def main(root_dir, model_filename, params_filename, test_length, num_tests, test_file_start_idx,
         analysis_dict, test_length_climo=10000, test_length_video=500):
@@ -483,29 +590,34 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0004/'
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/current_best/'
 model_filename = 'training_checkpoints/best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = 'TEST' #'base_0011'
+run_num = 'current_best'
 
 # Test Parameters
 test_length = 100    # will be batch size
-num_tests = 25
+num_tests = 1
 test_file_start_idx = 350000 
 
 test_length_climo = 10000
 
-test_length_video = 500 #500
+test_length_video = 1000
+
+pca_ncomp = 2
 
 # Analysis
 analysis_dict = {
-        'rmse': True,
-        'acc': True,
-        'spectra': True,
-        'video': True,
+        'rmse': False,
+        'acc': False,
+        'spectra': False,
         'spectra_leadtimes': [0, 4, 9, 39, 49],
-        'long_rollout_length': 500
+        'zonal_pca': True,
+        'pca_ncomp': pca_ncomp,
+        'video': False,
+        'div': True,
+        'long_rollout_length': test_length_video
         }
 
 main(root_dir, model_filename, params_filename, test_length, num_tests, test_file_start_idx,
-        analysis_dict, test_length_climo=test_length_climo, test_length_video=test_length_video)
+        analysis_dict, test_length_climo=test_length_climo, test_length_video=test_length_video) 
