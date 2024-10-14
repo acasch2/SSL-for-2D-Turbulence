@@ -440,7 +440,7 @@ class Trainer():
                 new_state_dict[name] = val
             self.model.load_state_dict(new_state_dict)
         self.iters = checkpoint['iters']
-        self.startEpoch = checkpoint['epoch']
+        self.startEpoch = checkpoint['epochs']
         print(f'START EPOCH:', self.startEpoch)
         if self.params.resuming:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
