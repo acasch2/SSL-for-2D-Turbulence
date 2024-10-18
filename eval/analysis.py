@@ -128,15 +128,15 @@ def spectrum_zonal_average_2D_FHIT(U,V):
   N_LES = U.shape[0]
 
   # fft of velocities along the first dimension
-  U_hat = np.fft.rfft(U, axis=1)/ N_LES
-  V_hat = np.fft.rfft(V, axis=1)/ N_LES
+  U_hat = np.fft.rfft(U, axis=1)/ N_LES  #axis=1
+  V_hat = np.fft.rfft(V, axis=1)/ N_LES  #axis=1
 
   # Energy
   E_hat = 0.5 * U_hat * np.conj(U_hat) + 0.5 * V_hat * np.conj(V_hat)
 
   # Average over the second dimension
   # Multiplying by 2 to account for the negative wavenumbers
-  E_hat = np.mean(np.abs(E_hat)*2, axis=0) 
+  E_hat = np.mean(np.abs(E_hat)*2, axis=0) #axis=0
   wavenumbers = np.linspace(0, N_LES//2, N_LES//2+1)
 
   return E_hat, wavenumbers
@@ -169,14 +169,14 @@ def get_zonal_PCA(data, n_comp=1):
     """
 
     # Zonally average data
-    zdata = np.mean(data, axis=2)
+    zdata = np.mean(data, axis=-1) 
     print(f'zdata.shape: {zdata.shape}')
 
     # initiate PCA
     pca = PCA(n_components=n_comp)
 
-    pcs = pca.fit_transform(zdata)  # [B, n_comp]
-    eofs = pca.components_          # [n_comp, X]
+    pcs = pca.fit_transform(zdata)      # [B, n_comp]
+    eofs = pca.components_              # [n_comp, X]
     print(f'pcs.shape: {pcs.shape}')
     print(f'eofs.shape: {eofs.shape}')
 
@@ -190,7 +190,7 @@ def get_div(U, V):
     Returns:
         div: [B,] divergence vs time
     """
-    
+   
     Lx, Ly = 2*np.pi, 2*np.pi
     Nx, Ny = U.shape[1], U.shape[2]
     Lx, Ly, X, Y, dx, dy = gridgen(Lx, Ly, Nx, Ny, INDEXING='ij')
@@ -199,8 +199,8 @@ def get_div(U, V):
 
     div = []
     for i in range(U.shape[0]):
-        Dx = derivative(U[i,:,:], [1,0], Kx, Ky, spectral=False)
-        Dy = derivative(V[i,:,:], [0,1], Kx, Ky, spectral=False)
+        Dx = derivative(U[i,:,:], [0,1], Kx, Ky, spectral=False) #[1,0]
+        Dy = derivative(V[i,:,:], [1,0], Kx, Ky, spectral=False) #[0,1]
         div.append(np.mean(np.abs(Dx + Dy)))
 
     return np.array(div)
@@ -218,8 +218,9 @@ def make_video(pred, tar):
         data = [pred[t, 0, :, :], pred[t, 1, :, :], tar[t, 0, :, :], tar[t, 1, :, :]]
         titles = ['ML: U', 'ML: V', 'Truth: U', 'Truth: V']
         for i, ax in enumerate(axs):
-            im = ax.imshow(data[i], cmap='bwr', vmin=-5, vmax=5, aspect='equal')
-            xlen = data[i].shape[-1]
+            data_i = data[i].transpose((-1,-2))
+            im = ax.imshow(data_i, cmap='bwr', vmin=-5, vmax=5, aspect='equal')
+            xlen = data_i.shape[-1]
             ax.set_title(titles[i])
             ax.set_xticks([0, xlen/2, xlen], [0, r'$\pi$', r'$2\pi$']) 
             ax.set_yticks([0, xlen/2, xlen], [0, r'$\pi$', r'$2\pi$'])
@@ -243,7 +244,7 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
     climo_data, _ = next(iter(dataloader_climo))
     print(f'climo_data.shape: {climo_data.shape}')
 
-    climo_data = climo_data.squeeze().transpose(-1,-2).detach().cpu().numpy()    # [B=n_steps, C, X, Y]
+    climo_data = climo_data.squeeze().detach().cpu().numpy()                     # [B=n_steps, C, X, Y]
     climo_u = climo_data[:,0].mean(axis=0)                                       # [X, Y]
     climo_v = climo_data[:,1].mean(axis=0) 
     print(f'climo_u.shape: {climo_u.shape}')                                     # should be [X, Y]
@@ -261,17 +262,16 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         print(f'ic.shape: {ic.shape}')
         n_steps = inputs.shape[0]
 
-        pred = n_step_rollout(model, ic, n=n_steps) #, train_tendencies=params["train_tendencies"])
-        #pred = pred[1:]  # remove ic
+        pred = n_step_rollout(model, ic, n=n_steps, train_tendencies=params["train_tendencies"])
         per_pred = inputs[0].repeat(n_steps, 1, 1, 1, 1)[:,:,0,:,:]
 
         print(f'pred.shape: {pred.shape}')                                      # should be: [B=n_steps, C, T=1, X, Y]
         print(f'per_pred.shape: {per_pred.shape}')
         print(f'targets.shape: {targets.shape}')
 
-        pred = pred.squeeze().transpose(-1,-2).detach().cpu().numpy()           # [B=n_steps, C, X, Y]
-        per_pred = per_pred.squeeze().transpose(-1,-2).detach().cpu().numpy()  
-        targets = targets.squeeze().transpose(-1,-2).detach().cpu().numpy()
+        pred = pred.squeeze().detach().cpu().numpy()                            # [B=n_steps, C, X, Y]
+        per_pred = per_pred.squeeze().detach().cpu().numpy()  
+        targets = targets.squeeze().detach().cpu().numpy()
 
         pred_u = pred[:,0]                                                      # [B=n_steps, X, Y]
         pred_v = pred[:,1]
@@ -332,16 +332,16 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         ic = inp[0].unsqueeze(dim=0)
         n_steps = inp.shape[0]
 
-        pred = n_step_rollout(model, ic, n=n_steps) #, train_tendencies=params["train_tendencies"])
+        pred = n_step_rollout(model, ic, n=n_steps, train_tendencies=params["train_tendencies"])
         #pred = pred[1:]
 
-        pred = pred.squeeze().transpose(-1, -2).detach().cpu().numpy()
-        tar = tar.squeeze().transpose(-1, -2).detach().cpu().numpy()
+        pred = pred.squeeze().detach().cpu().numpy()
+        tar = tar.squeeze().detach().cpu().numpy()
 
-        pred_u = pred[:,0,:,:]
-        pred_v = pred[:,1,:,:]
-        tar_u = tar[:,0,:,:]
-        tar_v = tar[:,1,:,:]
+        pred_u = pred[:,0]
+        pred_v = pred[:,1]
+        tar_u = tar[:,0]
+        tar_v = tar[:,1]
 
         if analysis_dict['video']:
             print(f'Making long roll-out video.')
@@ -361,6 +361,8 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
             results['tar_u_eof'] = tar_u_eof
 
         if analysis_dict['div']:
+            print(f'div. tar_u.shape, tar_v.shape: {tar_u.shape}, {tar_v.shape}\n')
+            print(f'div. pred_u.shape, pred_v.shape: {pred_u.shape}. {pred_v.shape}\n')
             pred_div = get_div(pred_u, pred_v)
             tar_div = get_div(tar_u, tar_v)
 
@@ -377,7 +379,7 @@ def plot_analysis(results, analysis_dict):
     if analysis_dict['rmse']:
         # U
         fig, ax = plt.subplots()
-        x = np.arange(1, 1+len(results['rmse_u_mean'])) # * 0.02 * 3
+        x = np.arange(1, 1+len(results['rmse_u_mean'])) 
         ax.plot(x, results['rmse_u_mean'], '-k', label='ML')
         upper = results['rmse_u_mean'] + results['rmse_u_std']
         lower = results['rmse_u_mean'] - results['rmse_u_std']
@@ -414,7 +416,7 @@ def plot_analysis(results, analysis_dict):
     if analysis_dict['acc']:
         # U
         fig, ax = plt.subplots()
-        x = np.arange(1, 1+len(results['acc_u_mean'])) #* 0.02 * 3
+        x = np.arange(1, 1+len(results['acc_u_mean'])) 
         ax.plot(x, results['acc_u_mean'], '-k', label='ML')
         upper = results['acc_u_mean'] + results['acc_u_std']
         lower = results['acc_u_mean'] - results['acc_u_std']
@@ -454,7 +456,7 @@ def plot_analysis(results, analysis_dict):
         ax.plot(x, results['spectra_tar'][0], '-k', label='Truth')
         for lead in analysis_dict['spectra_leadtimes']:
             spec = results['spectra'][lead]
-            label = f'{lead+1}$\Delta t$' # ({(lead+1) * 0.02 * 3:.2f})'
+            label = f'{lead+1}$\Delta t$' 
             ax.plot(x, spec, label=label)
             ax.set_xscale('log')
             ax.set_yscale('log')
@@ -490,9 +492,9 @@ def plot_analysis(results, analysis_dict):
         fig, ax = plt.subplots()
         x = np.arange(1, 1+results['pred_div'].shape[0])
         ax.plot(x, results['pred_div'], '--k', label='ML')
-        ax.plot(x, results['tar_div'], '-k', label='ML')
+        ax.plot(x, results['tar_div'], '-k', label='Truth')
         ax.set_xlabel('ML timestep')
-        ax.set_ylim([-1, 1])
+        #ax.set_ylim([-1, 1])
         ax.legend()
         plt.tight_layout()
         fig.savefig('Div_' + run_num + '.svg')
@@ -529,7 +531,8 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
         decoder_depth=params["decoder_depth"],
         decoder_num_heads=params["decoder_num_heads"],
         mlp_ratio=params["mlp_ratio"],
-        num_out_frames=params["num_out_frames"]
+        num_out_frames=params["num_out_frames"],
+        patch_recovery=params["patch_recovery"]
         )
     ckpt_temp = torch.load(model_fp, map_location=torch.device('cpu'))['model_state']
     ckpt = {}
@@ -545,6 +548,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
     dataloader, dataset = get_dataloader(data_dir=params["data_dir"],
                                     file_range=test_file_range,
                                     target_step=params["target_step"],
+                                    train_tendencies=params["train_tendencies"],
                                     batch_size=test_length,
                                     train=False,
                                     stride=params["target_step"],
@@ -557,6 +561,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
     dataloader_climo, dataset_climo = get_dataloader(data_dir=params["data_dir"],
                                     file_range=test_file_range,
                                     target_step=1,
+                                    train_tendencies=params["train_tendencies"],
                                     batch_size=test_length_climo,
                                     train=False,
                                     stride=1,
@@ -569,6 +574,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
     dataloader_video, datasaet_video = get_dataloader(data_dir=params["data_dir"],
                                     file_range=test_file_range,
                                     target_step=params["target_step"],
+                                    train_tendencies=params["train_tendencies"],
                                     batch_size=test_length_video,
                                     train=False,
                                     stride=params["target_step"],
@@ -597,24 +603,24 @@ run_num = 'current_best'
 
 # Test Parameters
 test_length = 100    # will be batch size
-num_tests = 1
+num_tests = 5
 test_file_start_idx = 350000 
 
 test_length_climo = 10000
 
-test_length_video = 1000
+test_length_video = 500
 
 pca_ncomp = 2
 
 # Analysis
 analysis_dict = {
-        'rmse': False,
-        'acc': False,
-        'spectra': False,
+        'rmse': True,
+        'acc': True,
+        'spectra': True,
         'spectra_leadtimes': [0, 4, 9, 39, 49],
         'zonal_pca': True,
         'pca_ncomp': pca_ncomp,
-        'video': False,
+        'video': True,
         'div': True,
         'long_rollout_length': test_length_video
         }

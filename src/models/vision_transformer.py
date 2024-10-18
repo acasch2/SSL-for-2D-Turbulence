@@ -8,6 +8,7 @@ from einops import rearrange
 
 from utils.patch_embed import PatchEmbed
 from utils.pos_embed import get_1d_sincos_pos_embed_from_grid, get_3d_sincos_pos_embed
+from utils.patch_recovery import PatchRecovery3D, SubPixelConvICNR_3D
 
 
 class ViT(nn.Module):
@@ -30,6 +31,7 @@ class ViT(nn.Module):
       mlp_ratio=4.,
       norm_layer=nn.LayerNorm,
       num_out_frames=1,
+      patch_recovery='linear', # ['linear',conv','subpixel_conv']
       checkpointing=None
   ):
       super().__init__()
@@ -57,7 +59,16 @@ class ViT(nn.Module):
           for i in range(decoder_depth)
       ])
       self.decoder_norm = norm_layer(decoder_embed_dim)
-      self.decoder_pred = nn.Linear(decoder_embed_dim, num_out_frames*patch_size*patch_size*in_chans, bias=True)
+
+      if patch_recovery == 'linear':
+          self.patchrecovery = nn.Linear(decoder_embed_dim, num_out_frames*patch_size*patch_size*in_chans, bias=True)
+      elif patch_recovery == 'conv':
+          self.patchrecovery = PatchRecovery3D((num_frames,img_size,img_size), (num_frames//tubelet_size,patch_size,patch_size),
+                                                decoder_embed_dim, in_chans)
+      elif patch_recovery == 'subpixel_conv':
+          self.patchrecovery = SubPixelConvICNR_3D((num_frames,img_size,img_size), (num_frames//tubelet_size,patch_size,patch_size),
+                                                   decoder_embed_dim, in_chans)
+      self.patch_recovery = patch_recovery
       self.num_out_frames = num_out_frames
       # ---------------
 
@@ -113,6 +124,19 @@ class ViT(nn.Module):
                        h=num_p, w=num_p, tub=tub, p=p, q=p)
       return imgs
 
+  def decoder_pred(self, x):
+      if isinstance(self.patchrecovery, nn.Linear):
+          x = self.patchrecovery(x)
+          x = self.unpatchify(x)
+          return x
+      else:
+          # reshape: [B, L, D] -> [B, C, num_patches_T, num_patches_X, num_patches_Y]
+          B, _, _ = x.shape
+          t, h, w = self.patch_embed.grid_size
+          x = x.reshape(B, -1, t, h, w)
+          x = self.patchrecovery(x)
+          return x
+
   def forward_encoder(self, x, train=False):
       # embed patches + add position encoding
       x = self.patch_embed(x)
@@ -144,7 +168,8 @@ class ViT(nn.Module):
 
       if self.checkpointing and train:
           x = checkpoint(self.decoder_norm, x, use_reentrant=True)
-          x = checkpoint(self.decoder_pred, x, use_reentrant=True)
+          x = checkpoint(self.decoder_pred, x, use_reentrat=True)
+
       else:
           x = self.decoder_norm(x)
           x = self.decoder_pred(x)
@@ -165,6 +190,6 @@ class ViT(nn.Module):
   def forward(self, x, train=False):
       latent = self.forward_encoder(x, train=train)
       pred = self.forward_decoder(latent, train=train)
-      pred = self.unpatchify(pred)
+      #pred = self.unpatchify(pred)
 
       return pred

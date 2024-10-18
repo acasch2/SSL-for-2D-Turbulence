@@ -29,6 +29,7 @@ class Trainer():
         self.train_dataloader, self.train_dataset, self.train_sampler = get_dataloader(data_dir=params["data_dir"],
                                                                                        file_range=params["train_file_range"],
                                                                                        target_step=params["target_step"],
+                                                                                       train_tendencies=params["train_tendencies"],
                                                                                        batch_size=params["batch_size"],
                                                                                        train=True,
                                                                                        num_frames=params["num_frames"],
@@ -40,6 +41,7 @@ class Trainer():
         self.valid_dataloader, self.valid_dataset = get_dataloader(data_dir=params["data_dir"],
                                                                    file_range=params["valid_file_range"],
                                                                    target_step=params["target_step"],
+                                                                   train_tendencies=params["train_tendencies"],
                                                                    batch_size=params["batch_size"],
                                                                    train=False,
                                                                    num_frames=params["num_frames"],
@@ -271,9 +273,6 @@ class Trainer():
             #outputs = self.model(inputs, train=True)
             #loss = self.model.module.forward_loss(labels, outputs)
 
-            if self.params["train_tendencies"]:
-                labels -= inputs
-
             pred, mask = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=True)
 
             if dist.is_initialized():
@@ -354,9 +353,6 @@ class Trainer():
 
                 #outputs = self.model(inputs, train=False)
                 #loss = self.model.module.forward_loss(labels, outputs)
-
-                if self.params["train_tendencies"]:
-                    labels -= inputs
 
                 pred, mask = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=False)
 
