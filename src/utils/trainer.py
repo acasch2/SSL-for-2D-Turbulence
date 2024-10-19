@@ -29,6 +29,7 @@ class Trainer():
         self.train_dataloader, self.train_dataset, self.train_sampler = get_dataloader(data_dir=params["data_dir"],
                                                                                        file_range=params["train_file_range"],
                                                                                        target_step=params["target_step"],
+                                                                                       train_tendencies=params["train_tendencies"],
                                                                                        batch_size=params["batch_size"],
                                                                                        train=True,
                                                                                        distributed=dist.is_initialized(),
@@ -40,6 +41,7 @@ class Trainer():
         self.valid_dataloader, self.valid_dataset = get_dataloader(data_dir=params["data_dir"],
                                                                    file_range=params["valid_file_range"],
                                                                    target_step=params["target_step"],
+                                                                   train_tendencies=params["train_tendencies"],
                                                                    batch_size=params["batch_size"],
                                                                    train=False,
                                                                    distributed=dist.is_initialized(),
@@ -74,6 +76,7 @@ class Trainer():
             decoder_num_heads=params["decoder_num_heads"],
             mlp_ratio=params["mlp_ratio"],
             num_out_frames=params["num_out_frames"],
+            patch_recovery=params["patch_recovery"],
             checkpointing=params["checkpointing"])
 
         # If finetuning, load pre-trained model weights
@@ -288,9 +291,6 @@ class Trainer():
             else:
                 outputs = self.model(inputs, train=True)
             
-            if self.params["train_tendencies"]:
-                labels -= inputs
-
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
 
@@ -384,9 +384,6 @@ class Trainer():
 
                 else:
                     outputs = self.model(inputs, train=False)
-
-                if self.params["train_tendencies"]:
-                    labels -= inputs
 
                 if dist.is_initialized():
                     loss = self.model.module.forward_loss(labels, outputs)

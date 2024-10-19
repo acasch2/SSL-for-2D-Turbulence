@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --time=4-00:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH -N 1
-#SBATCH --ntasks=8
+#SBATCH --ntasks=4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=250G
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:t4:8
+#SBATCH --gres=gpu:t4:4
 #SBATCH --output=/scratch/user/u.dp200518/Logfiles/2DTurb_Base_%x.out
 
 #SBATCH --account=145439188689
@@ -38,4 +38,4 @@ CONFIG=BASE
 
 # ------ Run main script ------ #
 
-torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} train.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start
+torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} train.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start
