@@ -8,8 +8,7 @@ BASE: &BASE
     log_to_wandb: !!bool False #True
     project: 'SSL-2DTurb'
     group: 'Dhruvit-base-emulator'
-    name: '0001'
-
+    name: '0009'
     diagnostic_logs: !!bool True
 
     fresh_start: True
@@ -25,7 +24,7 @@ BASE: &BASE
     pin_memory: !!bool True
 
     gpu: !!bool True
-    lr: 5e-4
+    lr: 1e-4 #5e-4
     scheduler: 'ReduceLROnPlateau'
     warmup: !!bool True
     warmup_startfactor: 0.001 
