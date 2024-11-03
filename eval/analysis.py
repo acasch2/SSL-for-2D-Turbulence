@@ -531,8 +531,9 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
         decoder_depth=params["decoder_depth"],
         decoder_num_heads=params["decoder_num_heads"],
         mlp_ratio=params["mlp_ratio"],
-        num_out_frames=params["num_out_frames"],
-        patch_recovery=params["patch_recovery"]
+        num_out_frames=params["num_out_frames"]
+        # patch_recovery='params["patch_recovery"]'
+        # patch_recovery=params["patch_recovery"]
         )
     ckpt_temp = torch.load(model_fp, map_location=torch.device('cpu'))['model_state']
     ckpt = {}
@@ -596,19 +597,35 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/current_best/'
+# root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/current_best/'
+# model_filename = 'training_checkpoints/best_ckpt.tar'
+# params_filename = 'hyperparams.yaml'
+# run_num = 'current_best'
+
+run_num = 'base'
+root_dir = '/ocean/projects/phy220045p/jakhar/2d_emulator_vision/SSL-for-2D-Turbulence/results/BASE/' + run_num + '/'
 model_filename = 'training_checkpoints/best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = 'current_best'
 
-# Test Parameters
-test_length = 100    # will be batch size
-num_tests = 5
+# # Test Parameters
+# test_length = 100    # will be batch size
+# num_tests = 5
+# test_file_start_idx = 350000 
+
+# test_length_climo = 10000
+
+# test_length_video = 500
+
+# pca_ncomp = 2
+
+
+test_length = 10    # will be batch size
+num_tests = 2
 test_file_start_idx = 350000 
 
-test_length_climo = 10000
+test_length_climo = 10
 
-test_length_video = 500
+test_length_video = 5
 
 pca_ncomp = 2
 
@@ -617,12 +634,14 @@ analysis_dict = {
         'rmse': True,
         'acc': True,
         'spectra': True,
-        'spectra_leadtimes': [0, 4, 9, 39, 49],
+        # 'spectra_leadtimes': [0, 4, 9, 39, 49],
+        'spectra_leadtimes': [0, 1, 2, 5],
         'zonal_pca': True,
         'pca_ncomp': pca_ncomp,
         'video': True,
         'div': True,
-        'long_rollout_length': test_length_video
+        'long_rollout_length': test_length_video,
+        'EOF_target': True
         }
 
 main(root_dir, model_filename, params_filename, test_length, num_tests, test_file_start_idx,

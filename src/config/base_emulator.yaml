@@ -59,6 +59,7 @@ BASE: &BASE
     decoder_num_heads: 4 #6
     mlp_ratio: 4.
     num_out_frames: 1 # Numebr of output frames (time steps) to predict
+    patch_recovery: 'linear' # linear conv subpixel_conv
 
     train_tendencies: !!bool False # Training neural netwrok on difference of X(t+dt) - X(t) = Tendencies
 
