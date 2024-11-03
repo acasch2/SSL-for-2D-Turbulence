@@ -85,6 +85,9 @@ class TurbulenceDataset(torch.utils.data.Dataset):
 
         mean = list(np.load(mean_fp)) 
         std = list(np.load(std_fp))
+        print(f'mean: {mean}')
+        print(f'std: {std}')
+
         return mean, std
 
     def __len__(self):

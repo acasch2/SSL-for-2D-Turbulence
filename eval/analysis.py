@@ -218,7 +218,7 @@ def make_video(pred, tar):
         data = [pred[t, 0, :, :], pred[t, 1, :, :], tar[t, 0, :, :], tar[t, 1, :, :]]
         titles = ['ML: U', 'ML: V', 'Truth: U', 'Truth: V']
         for i, ax in enumerate(axs):
-            data_i = data[i].transpose((-1,-2))
+            data_i = data[i] #.transpose((-1,-2))
             im = ax.imshow(data_i, cmap='bwr', vmin=-5, vmax=5, aspect='equal')
             xlen = data_i.shape[-1]
             ax.set_title(titles[i])
@@ -244,7 +244,7 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
     climo_data, _ = next(iter(dataloader_climo))
     print(f'climo_data.shape: {climo_data.shape}')
 
-    climo_data = climo_data.squeeze().detach().cpu().numpy()                     # [B=n_steps, C, X, Y]
+    climo_data = climo_data.transpose(-1, -2).squeeze().detach().cpu().numpy()                     # [B=n_steps, C, X, Y]
     climo_u = climo_data[:,0].mean(axis=0)                                       # [X, Y]
     climo_v = climo_data[:,1].mean(axis=0) 
     print(f'climo_u.shape: {climo_u.shape}')                                     # should be [X, Y]
@@ -269,9 +269,9 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         print(f'per_pred.shape: {per_pred.shape}')
         print(f'targets.shape: {targets.shape}')
 
-        pred = pred.squeeze().detach().cpu().numpy()                            # [B=n_steps, C, X, Y]
-        per_pred = per_pred.squeeze().detach().cpu().numpy()  
-        targets = targets.squeeze().detach().cpu().numpy()
+        pred = pred.transpose(-1,-2).squeeze().detach().cpu().numpy()                            # [B=n_steps, C, X, Y]
+        per_pred = per_pred.transpose(-1,-2).squeeze().detach().cpu().numpy()  
+        targets = targets.transpose(-1,-2).squeeze().detach().cpu().numpy()
 
         pred_u = pred[:,0]                                                      # [B=n_steps, X, Y]
         pred_v = pred[:,1]
@@ -335,8 +335,8 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         pred = n_step_rollout(model, ic, n=n_steps, train_tendencies=params["train_tendencies"])
         #pred = pred[1:]
 
-        pred = pred.squeeze().detach().cpu().numpy()
-        tar = tar.squeeze().detach().cpu().numpy()
+        pred = pred.transpose(-1,-2).squeeze().detach().cpu().numpy()
+        tar = tar.transpose(-1,-2).squeeze().detach().cpu().numpy()
 
         pred_u = pred[:,0]
         pred_v = pred[:,1]
