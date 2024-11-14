@@ -132,7 +132,8 @@ def spectrum_zonal_average_2D_FHIT(U,V):
   V_hat = np.fft.rfft(V, axis=1)/ N_LES  #axis=1
 
   # Energy
-  E_hat = 0.5 * U_hat * np.conj(U_hat) + 0.5 * V_hat * np.conj(V_hat)
+  #E_hat = 0.5 * U_hat * np.conj(U_hat) + 0.5 * V_hat * np.conj(V_hat)
+  E_hat = U_hat
 
   # Average over the second dimension
   # Multiplying by 2 to account for the negative wavenumbers
@@ -235,7 +236,7 @@ def make_video(pred, tar):
 
     imageio.mimsave(f'Video_' + run_num + '.gif', frames, fps=5)
 
-def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict, params):
+def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, dataset, analysis_dict, params):
     """
     Returns:
         results: dictionary of {'rmse','rmse_per','acc','acc_per','spectra'}
@@ -279,6 +280,13 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         per_pred_v = per_pred[:,1]
         tar_u = targets[:,0]
         tar_v = targets[:,1]
+
+        # Unnormalize data
+        pred_u = (pred_u - dataset.input_mean[0]) * dataset.input_std[0]
+        pred_v = (pred_v - dataset.input_mean[1]) * dataset.input_std[1]
+        tar_u = (tar_u - dataset.label_mean[0]) * dataset.label_std[0]
+        tar_v = (tar_v - dataset.label_mean[1]) * dataset.label_std[1]
+
 
         if analysis_dict['rmse']:
             rmse_u.append(get_rmse(tar_u, pred_u, climo=climo_u))
@@ -338,6 +346,12 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         pred = pred.transpose(-1,-2).squeeze().detach().cpu().numpy()
         tar = tar.transpose(-1,-2).squeeze().detach().cpu().numpy()
 
+        # Unnormalize data
+        pred[:,0] = (pred[:,0] - dataset.input_mean[0]) * dataset.input_std[0]
+        pred[:,1] = (pred[:,1] - dataset.input_mean[1]) * dataset.input_std[1]
+        tar[:,0] = (tar[:,0] - dataset.label_mean[0]) * dataset.label_std[0]
+        tar[:,1] = (tar[:,1] - dataset.label_mean[1]) * dataset.label_std[1]
+
         pred_u = pred[:,0]
         pred_v = pred[:,1]
         tar_u = tar[:,0]
@@ -363,6 +377,8 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, anal
         if analysis_dict['div']:
             print(f'div. tar_u.shape, tar_v.shape: {tar_u.shape}, {tar_v.shape}\n')
             print(f'div. pred_u.shape, pred_v.shape: {pred_u.shape}. {pred_v.shape}\n')
+
+            # Rescale preds/tars for div calculation
             pred_div = get_div(pred_u, pred_v)
             tar_div = get_div(tar_u, tar_v)
 
@@ -589,7 +605,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
     print(f'len(dataset_climo): {len(dataset_climo)}')
     print(f'len(dataset_video): {len(datasaet_video)}')
 
-    results = perform_analysis(model, dataloader, dataloader_climo, dataloader_video, analysis_dict, params)
+    results = perform_analysis(model, dataloader, dataloader_climo, dataloader_video, dataset, analysis_dict, params)
 
     plot_analysis(results, analysis_dict)
 
@@ -631,9 +647,9 @@ pca_ncomp = 2
 
 # Analysis
 analysis_dict = {
-        'rmse': True,
-        'acc': True,
-        'spectra': True,
+        'rmse': False,
+        'acc': False,
+        'spectra': False,
         # 'spectra_leadtimes': [0, 4, 9, 39, 49],
         'spectra_leadtimes': [0, 1, 2, 5],
         'zonal_pca': True,
