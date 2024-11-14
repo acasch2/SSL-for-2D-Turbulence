@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --time=3-00:00:00
 #SBATCH -N 1
-#SBATCH --ntasks=2
+#SBATCH --ntasks=4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=250G
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a30:2
+#SBATCH --gres=gpu:a10:4
 #SBATCH --output=/scratch/user/u.dp200518/Logfiles/2DTurb_Base_%x.out
 
 #SBATCH --account=145439188689

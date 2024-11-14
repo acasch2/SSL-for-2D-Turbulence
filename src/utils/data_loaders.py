@@ -65,12 +65,21 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         input_mean, input_std = self._get_file_stats(inp=True)
         self.normalize_input = Normalize(input_mean, input_std)
 
+        self.input_mean = input_mean
+        self.input_std = input_std
+        self.label_mean = input_mean
+        self.label_std = input_std
+
         if self.train_tendencies:
             label_mean, label_std = self._get_file_stats(inp=False)
             self.normalize_label = Normalize(label_mean, label_std)
+
+            self.label_mean = label_mean
+            self.label_std = label_std
         else:
             self.normalize_label = self.normalize_input
 
+    
     def _get_file_stats(self, inp):
         """
         Returns:
