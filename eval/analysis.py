@@ -547,9 +547,8 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
         decoder_depth=params["decoder_depth"],
         decoder_num_heads=params["decoder_num_heads"],
         mlp_ratio=params["mlp_ratio"],
-        num_out_frames=params["num_out_frames"]
-        # patch_recovery='params["patch_recovery"]'
-        # patch_recovery=params["patch_recovery"]
+        num_out_frames=params["num_out_frames"],
+        patch_recovery=params["patch_recovery"]
         )
     ckpt_temp = torch.load(model_fp, map_location=torch.device('cpu'))['model_state']
     ckpt = {}
@@ -618,7 +617,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # params_filename = 'hyperparams.yaml'
 # run_num = 'current_best'
 
-run_num = 'base'
+run_num = 'spectral_loss_0.5_30'
 root_dir = '/ocean/projects/phy220045p/jakhar/2d_emulator_vision/SSL-for-2D-Turbulence/results/BASE/' + run_num + '/'
 model_filename = 'training_checkpoints/best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
@@ -647,17 +646,17 @@ pca_ncomp = 2
 
 # Analysis
 analysis_dict = {
-        'rmse': False,
-        'acc': False,
-        'spectra': False,
+        'rmse': True,
+        'acc': True,
+        'spectra': True,
         # 'spectra_leadtimes': [0, 4, 9, 39, 49],
         'spectra_leadtimes': [0, 1, 2, 5],
-        'zonal_pca': True,
+        'zonal_pca': False,
         'pca_ncomp': pca_ncomp,
-        'video': True,
-        'div': True,
+        'video': False,
+        'div': False,
         'long_rollout_length': test_length_video,
-        'EOF_target': True
+        'EOF_target': False
         }
 
 main(root_dir, model_filename, params_filename, test_length, num_tests, test_file_start_idx,
