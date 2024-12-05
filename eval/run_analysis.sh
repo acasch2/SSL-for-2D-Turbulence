@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=60G
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a10:1
+#SBATCH --gres=gpu:a40:1
 #SBATCH -o run_analysis.out
 #SBATCH -e run_analysis.err
 

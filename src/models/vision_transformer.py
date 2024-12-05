@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 from timm.models.vision_transformer import Block
 from einops import rearrange
+import numpy as np
 
 from utils.patch_embed import PatchEmbed
 from utils.pos_embed import get_1d_sincos_pos_embed_from_grid, get_3d_sincos_pos_embed
@@ -42,9 +43,10 @@ class ViT(nn.Module):
       num_patches = self.patch_embed.num_patches
 
       self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, encoder_embed_dim), requires_grad=False)
-
+    
+      drop_path = 0. * np.linspace(0., 0.2, encoder_depth)
       self.encoder_blocks = nn.ModuleList([
-          Block(encoder_embed_dim, encoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+          Block(encoder_embed_dim, encoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer, drop_path=drop_path[i])
           for i in range(encoder_depth)
       ])
       self.norm = norm_layer(encoder_embed_dim)
@@ -54,8 +56,9 @@ class ViT(nn.Module):
 
       self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches, decoder_embed_dim), requires_grad=False)
 
+      drop_path = 0. * np.linspace(0.2, 0., decoder_depth)
       self.decoder_blocks = nn.ModuleList([
-          Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+          Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer, drop_path=drop_path[i])
           for i in range(decoder_depth)
       ])
       self.decoder_norm = norm_layer(decoder_embed_dim)
@@ -183,6 +186,7 @@ class ViT(nn.Module):
       """
 
       loss = (pred - img) ** 2
+      #loss = torch.abs(pred-img)
       loss = loss.mean()
 
       return loss

@@ -159,7 +159,7 @@ def get_spectra(U, V):
 
     return spectra, wavenumbers
 
-def get_zonal_PCA(data, n_comp=1):
+def get_zonal_PCA(zdata, n_comp=1):
     """
     Compute PCA of zonally-averaged fields.
     Args:
@@ -170,7 +170,7 @@ def get_zonal_PCA(data, n_comp=1):
     """
 
     # Zonally average data
-    zdata = np.mean(data, axis=-1) 
+    zdata = np.mean(zdata, axis=-1) 
     print(f'zdata.shape: {zdata.shape}')
 
     # initiate PCA
@@ -248,7 +248,9 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, data
     climo_data = climo_data.transpose(-1, -2).squeeze().detach().cpu().numpy()                     # [B=n_steps, C, X, Y]
     climo_u = climo_data[:,0].mean(axis=0)                                       # [X, Y]
     climo_v = climo_data[:,1].mean(axis=0) 
+    climo_u_zonal = climo_data[:,0].mean(axis=(0,2))
     print(f'climo_u.shape: {climo_u.shape}')                                     # should be [X, Y]
+    print(f'clim_u_zonal.shape: {climo_u_zonal.shape}')
 
     rmse_u, rmse_u_per = [], []
     rmse_v, rmse_v_per = [], []
@@ -282,10 +284,10 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, data
         tar_v = targets[:,1]
 
         # Unnormalize data
-        pred_u = (pred_u - dataset.input_mean[0]) * dataset.input_std[0]
-        pred_v = (pred_v - dataset.input_mean[1]) * dataset.input_std[1]
-        tar_u = (tar_u - dataset.label_mean[0]) * dataset.label_std[0]
-        tar_v = (tar_v - dataset.label_mean[1]) * dataset.label_std[1]
+        pred_u = (pred_u * dataset.input_std[0]) + dataset.input_mean[0]
+        pred_v = (pred_v * dataset.input_std[1]) + dataset.input_mean[1]
+        tar_u = (tar_u * dataset.label_std[0]) + dataset.label_mean[0]
+        tar_v = (tar_v * dataset.label_std[1]) + dataset.label_mean[1]
 
 
         if analysis_dict['rmse']:
@@ -312,6 +314,19 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, data
     # Average over all predictions and Save results
     results = {}
     if analysis_dict['rmse']:
+        results['rmse_u_median'] = np.quantile(np.stack(rmse_u, axis=0), 0.5, axis=0)
+        results['rmse_u_uq'] = np.quantile(np.stack(rmse_u, axis=0), 0.75, axis=0)
+        results['rmse_u_lq'] = np.quantile(np.stack(rmse_u, axis=0), 0.25, axis=0)
+        results['rmse_u_per_median'] = np.quantile(np.stack(rmse_u_per, axis=0), 0.5, axis=0)
+        results['rmse_u_per_uq'] = np.quantile(np.stack(rmse_u_per, axis=0), 0.75, axis=0)
+        results['rmse_u_per_lq'] = np.quantile(np.stack(rmse_u_per, axis=0), 0.25, axis=0)
+        results['rmse_v_median'] = np.quantile(np.stack(rmse_v, axis=0), 0.5, axis=0)
+        results['rmse_v_uq'] = np.quantile(np.stack(rmse_v, axis=0), 0.75, axis=0)
+        results['rmse_v_lq'] = np.quantile(np.stack(rmse_v, axis=0), 0.25, axis=0)
+        results['rmse_v_per_median'] = np.quantile(np.stack(rmse_v_per, axis=0), 0.5, axis=0)
+        results['rmse_v_per_uq'] = np.quantile(np.stack(rmse_v_per, axis=0), 0.75, axis=0)
+        results['rmse_v_per_lq'] = np.quantile(np.stack(rmse_v_per, axis=0), 0.25, axis=0)
+
         results['rmse_u_mean'] = np.mean(np.stack(rmse_u, axis=0), axis=0)
         results['rmse_u_std'] = np.std(np.stack(rmse_u, axis=0), axis=0)
         results['rmse_u_per_mean'] = np.mean(np.stack(rmse_u_per, axis=0), axis=0)
@@ -321,6 +336,19 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, data
         results['rmse_v_per_mean'] = np.mean(np.stack(rmse_v_per, axis=0), axis=0)
         results['rmse_v_per_std'] = np.std(np.stack(rmse_v_per, axis=0), axis=0)
     if analysis_dict['acc']:
+        results['acc_u_median'] = np.quantile(np.stack(acc_u, axis=0), 0.5, axis=0)
+        results['acc_u_uq'] = np.quantile(np.stack(acc_u, axis=0), 0.75, axis=0)
+        results['acc_u_lq'] = np.quantile(np.stack(acc_u, axis=0), 0.25, axis=0)
+        results['acc_u_per_median'] = np.quantile(np.stack(acc_u_per, axis=0), 0.5, axis=0)
+        results['acc_u_per_uq'] = np.quantile(np.stack(acc_u_per, axis=0), 0.75, axis=0)
+        results['acc_u_per_lq'] = np.quantile(np.stack(acc_u_per, axis=0), 0.25, axis=0)
+        results['acc_v_median'] = np.quantile(np.stack(acc_v, axis=0), 0.5, axis=0)
+        results['acc_v_uq'] = np.quantile(np.stack(acc_v, axis=0), 0.75, axis=0)
+        results['acc_v_lq'] = np.quantile(np.stack(acc_v, axis=0), 0.25, axis=0)
+        results['acc_v_per_median'] = np.quantile(np.stack(acc_v_per, axis=0), 0.5, axis=0)
+        results['acc_v_per_uq'] = np.quantile(np.stack(acc_v_per, axis=0), 0.75, axis=0)
+        results['acc_v_per_lq'] = np.quantile(np.stack(acc_v_per, axis=0), 0.25, axis=0)
+
         results['acc_u_mean'] = np.mean(np.stack(acc_u, axis=0), axis=0)
         results['acc_u_std'] = np.std(np.stack(acc_u, axis=0), axis=0)
         results['acc_u_per_mean'] = np.mean(np.stack(acc_u_per, axis=0), axis=0)
@@ -347,10 +375,10 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, data
         tar = tar.transpose(-1,-2).squeeze().detach().cpu().numpy()
 
         # Unnormalize data
-        pred[:,0] = (pred[:,0] - dataset.input_mean[0]) * dataset.input_std[0]
-        pred[:,1] = (pred[:,1] - dataset.input_mean[1]) * dataset.input_std[1]
-        tar[:,0] = (tar[:,0] - dataset.label_mean[0]) * dataset.label_std[0]
-        tar[:,1] = (tar[:,1] - dataset.label_mean[1]) * dataset.label_std[1]
+        pred[:,0] = (pred[:,0] * dataset.input_std[0]) + dataset.input_mean[0]
+        pred[:,1] = (pred[:,1] * dataset.input_std[1]) + dataset.input_mean[1]
+        tar[:,0] = (tar[:,0] * dataset.label_std[0]) + dataset.label_mean[0]
+        tar[:,1] = (tar[:,1] * dataset.label_std[1]) + dataset.label_mean[1]
 
         pred_u = pred[:,0]
         pred_v = pred[:,1]
@@ -362,6 +390,10 @@ def perform_analysis(model, dataloader, dataloader_climo, dataloader_video, data
             make_video(pred, tar)
 
         if analysis_dict['zonal_pca']:
+
+            pred_u_zonal = np.mean(pred_u, axis=-1) - climo_u_zonal
+            tar_u_zonal = np.mean(tar_u, axis=-1) - climo_u_zonal
+
             pred_u_pc, pred_u_eof = get_zonal_PCA(pred_u,
                                                     n_comp=analysis_dict['pca_ncomp'])
             tar_u_pc, tar_u_eof = get_zonal_PCA(tar_u,
@@ -395,14 +427,14 @@ def plot_analysis(results, analysis_dict):
     if analysis_dict['rmse']:
         # U
         fig, ax = plt.subplots()
-        x = np.arange(1, 1+len(results['rmse_u_mean'])) 
-        ax.plot(x, results['rmse_u_mean'], '-k', label='ML')
-        upper = results['rmse_u_mean'] + results['rmse_u_std']
-        lower = results['rmse_u_mean'] - results['rmse_u_std']
+        x = np.arange(1, 1+len(results['rmse_u_median'])) 
+        ax.plot(x, results['rmse_u_median'], '-k', label='ML')
+        upper = results['rmse_u_uq'] # + results['rmse_u_std']
+        lower = results['rmse_u_lq'] # - results['rmse_u_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
-        ax.plot(x, results['rmse_u_per_mean'], '--k', label='Persistence')
-        upper = results['rmse_u_per_mean'] + results['rmse_u_per_std']
-        lower = results['rmse_u_per_mean'] - results['rmse_u_per_std']
+        ax.plot(x, results['rmse_u_per_median'], '--k', label='Persistence')
+        upper = results['rmse_u_per_uq'] # + results['rmse_u_per_std']
+        lower = results['rmse_u_per_lq'] # - results['rmse_u_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('RMSE')
         ax.set_xlabel(r'Lead time ($\Delta t$)')
@@ -413,13 +445,13 @@ def plot_analysis(results, analysis_dict):
         fig.savefig('RMSE_U_' + run_num + '.svg')
         # V
         fig, ax = plt.subplots()
-        ax.plot(x, results['rmse_v_mean'], '-k', label='ML')
-        upper = results['rmse_v_mean'] + results['rmse_v_std']
-        lower = results['rmse_v_mean'] - results['rmse_v_std']
+        ax.plot(x, results['rmse_v_median'], '-k', label='ML')
+        upper = results['rmse_v_uq'] # + results['rmse_v_std']
+        lower = results['rmse_v_lq'] # - results['rmse_v_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
-        ax.plot(x, results['rmse_v_per_mean'], '--k', label='Persistence')
-        upper = results['rmse_v_per_mean'] + results['rmse_v_per_std']
-        lower = results['rmse_v_per_mean'] - results['rmse_v_per_std']
+        ax.plot(x, results['rmse_v_per_median'], '--k', label='Persistence')
+        upper = results['rmse_v_per_uq'] # + results['rmse_v_per_std']
+        lower = results['rmse_v_per_lq'] # - results['rmse_v_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('RMSE')
         ax.set_xlabel(r'Lead time ($\Delta t$)')
@@ -432,14 +464,14 @@ def plot_analysis(results, analysis_dict):
     if analysis_dict['acc']:
         # U
         fig, ax = plt.subplots()
-        x = np.arange(1, 1+len(results['acc_u_mean'])) 
-        ax.plot(x, results['acc_u_mean'], '-k', label='ML')
-        upper = results['acc_u_mean'] + results['acc_u_std']
-        lower = results['acc_u_mean'] - results['acc_u_std']
+        x = np.arange(1, 1+len(results['acc_u_median'])) 
+        ax.plot(x, results['acc_u_median'], '-k', label='ML')
+        upper = results['acc_u_uq'] # + results['acc_u_std']
+        lower = results['acc_u_lq'] # - results['acc_u_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
-        ax.plot(x, results['acc_u_per_mean'], '--k', label='Persistence')
-        upper = results['acc_u_per_mean'] + results['acc_u_per_std']
-        lower = results['acc_u_per_mean'] - results['acc_u_per_std']
+        ax.plot(x, results['acc_u_per_median'], '--k', label='Persistence')
+        upper = results['acc_u_per_uq'] # + results['acc_u_per_std']
+        lower = results['acc_u_per_lq'] # - results['acc_u_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('ACC')
         ax.set_xlabel(r'Lead time ($\Delta t$)')
@@ -450,13 +482,13 @@ def plot_analysis(results, analysis_dict):
         fig.savefig('ACC_U_' + run_num + '.svg')
         # V
         fig, ax = plt.subplots()
-        ax.plot(x, results['acc_v_mean'], '-k', label='ML')
-        upper = results['acc_v_mean'] + results['acc_v_std']
-        lower = results['acc_v_mean'] - results['acc_v_std']
+        ax.plot(x, results['acc_v_median'], '-k', label='ML')
+        upper = results['acc_v_uq'] # + results['acc_v_std']
+        lower = results['acc_v_lq'] # - results['acc_v_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
-        ax.plot(x, results['acc_v_per_mean'], '--k', label='Persistence')
-        upper = results['acc_v_per_mean'] + results['acc_v_per_std']
-        lower = results['acc_v_per_mean'] - results['acc_v_per_std']
+        ax.plot(x, results['acc_v_per_median'], '--k', label='Persistence')
+        upper = results['acc_v_per_uq'] # + results['acc_v_per_std']
+        lower = results['acc_v_per_lq'] # - results['acc_v_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('ACC')
         ax.set_xlabel(r'Lead time ($\Delta t$)')
@@ -612,14 +644,14 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0011/'
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0023/'
 model_filename = 'training_checkpoints/best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = 'base_0011'
+run_num = 'base_0023'
 
 # Test Parameters
 test_length = 100   # will be batch size
-num_tests = 2
+num_tests = 10
 test_file_start_idx = 350000 
 
 test_length_climo = 10000
@@ -630,14 +662,14 @@ pca_ncomp = 2
 
 # Analysis
 analysis_dict = {
-        'rmse': False,
-        'acc': False,
-        'spectra': False,
+        'rmse': True,
+        'acc': True,
+        'spectra': True,
         'spectra_leadtimes': [0, 4, 9, 39, 49],
-        'zonal_pca': True,
+        'zonal_pca': False,
         'pca_ncomp': pca_ncomp,
-        'video': True,
-        'div': True,
+        'video': False,
+        'div': False,
         'long_rollout_length': test_length_video
         }
 
