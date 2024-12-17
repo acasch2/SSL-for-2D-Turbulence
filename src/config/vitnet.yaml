@@ -8,7 +8,7 @@ BASE: &BASE
     log_to_wandb: !!bool False #True
     project: 'SSL-2DTurb'
     group: 'Dhruvit-base-emulator'
-    name: '0012'
+    name: '0023'
     diagnostic_logs: !!bool True
 
     fresh_start: True
@@ -29,7 +29,7 @@ BASE: &BASE
     warmup: !!bool True
     warmup_startfactor: 0.001 
     warmup_totaliters: 3
-    weight_decay: 1e-6
+    weight_decay: 1e-8
     max_epochs: 500
     checkpointing: !!bool False #True
 
@@ -37,10 +37,10 @@ BASE: &BASE
 
     img_size: 256
     patch_size: 4
-    num_frames: 2  #1
-    tubelet_size: 2   #1
+    num_frames: 2
+    tubelet_size: 2
     in_chans: 2
-    encoder_embed_dim: 96 #192
+    encoder_embed_dim: 192
     encoder_depth: 4 #6
     encoder_num_heads: 4 #6
     decoder_embed_dim: 96 #192
