@@ -34,6 +34,7 @@ class Trainer():
                                                                                        train=True,
                                                                                        num_frames=params["num_frames"],
                                                                                        num_out_frames=params["num_out_frames"],
+                                                                                       target_step_hist=params["target_step_hist"],
                                                                                        distributed=dist.is_initialized(),
                                                                                        num_workers=params["num_workers"],
                                                                                        pin_memory=params["pin_memory"])
@@ -46,6 +47,7 @@ class Trainer():
                                                                    train=False,
                                                                    num_frames=params["num_frames"],
                                                                    num_out_frames=params["num_out_frames"],
+                                                                   target_step_hist=params["target_step_hist"],
                                                                    distributed=dist.is_initialized(),
                                                                    num_workers=params["num_workers"],
                                                                    pin_memory=params["pin_memory"])
@@ -76,18 +78,27 @@ class Trainer():
             decoder_num_heads=params["decoder_num_heads"],
             mlp_ratio=params["mlp_ratio"],
             num_out_frames=params["num_out_frames"],
+            patch_recovery=params["patch_recovery"],
             checkpointing=params["checkpointing"])
 
         # If finetuning, load pre-trained model weights
         if params["mae_finetune"]:
-            checkpoint_model = torch.load(params["mae_finetune_fp"], map_location='cpu')
+            checkpoint_model_temp = torch.load(params["mae_finetune_fp"], map_location='cpu')['model_state']
+            checkpoint_model = {}
+            for key, val in checkpoint_model_temp.items():
+                key_new = key[7:]                  # Removing 'module.' that is appended before each key by DDP
+                checkpoint_model[key_new] = val
 
             print(f"Load pre-trained checkpoint from: {params['mae_finetune_fp']}")
             state_dict = self.model.state_dict()
-            for k in ['head.weights', 'head.bias']:
-                if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
-                    print(f"Removing key {k} from pretrained checkpoint.")
-                    del checkpoint_model[k]
+            #for k in ['head.weights', 'head.bias']:
+            #    if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
+            #        print(f"Removing key {k} from pretrained checkpoint.")
+            #        del checkpoint_model[k]
+            for key, val in state_dict.items():
+                if key in checkpoint_model.keys() and val.shape != checkpoint_model[key].shape:
+                    print(f'Removing key {key} from pretrained checkpoint.')
+                    del checkpoint_model[key]
 
             msg = self.model.load_state_dict(checkpoint_model, strict=False)
             print(msg)
@@ -360,9 +371,6 @@ class Trainer():
                     loss = self.model.module.forward_loss(labels, pred, mask)
                 else:
                     loss = self.model.forward_loss(labels, pred, mask)
-
-                # check valid pred
-                self.val_pred = outputs
 
                 valid_loss += loss
 

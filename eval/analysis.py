@@ -602,7 +602,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
                                     stride=params["target_step"],
                                     distributed=dist.is_initialized(),
                                     num_frames=params["num_frames"],
-                                    num_out_frames=params["num_out_frames"],
+                                    num_out_frames=1, #params["num_out_frames"],
                                     num_workers=2,
                                     pin_memory=params["pin_memory"])
     test_file_range = (test_file_start_idx, test_file_start_idx+test_length_climo)
@@ -628,7 +628,7 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
                                     stride=params["target_step"],
                                     distributed=dist.is_initialized(),
                                     num_frames=params["num_frames"],
-                                    num_out_frames=params["num_out_frames"],
+                                    num_out_frames=1, #params["num_out_frames"],
                                     num_workers=2,
                                     pin_memory=params["pin_memory"])
 
@@ -644,10 +644,10 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0023/'
-model_filename = 'training_checkpoints/best_ckpt.tar'
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0031/'
+model_filename = 'training_checkpoints/ckpt_450.tar' #ckpt_200.tar best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = 'base_0023'
+run_num = '0031_epoch450'
 
 # Test Parameters
 test_length = 100   # will be batch size

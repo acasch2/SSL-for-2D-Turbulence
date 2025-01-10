@@ -9,17 +9,17 @@ from py2d.convert import Omega2Psi, Psi2UV
 
 
 def get_dataloader(data_dir, file_range, target_step, train_tendencies, batch_size, train, distributed, stride=1, 
-                   num_frames=1, num_out_frames=1, num_workers=1, pin_memory=True):
+                   num_frames=1, num_out_frames=1, target_step_hist=None, num_workers=1, pin_memory=True):
 
     if isinstance(data_dir, list) and len(data_dir)>1:
         assert len(file_range) == len(data_dir), 'len(file_range) should be the same as len(data_dir)'
         dataset = TurbulenceMultiDataset(data_dir=data_dir, file_range=file_range, target_step=target_step,
                                          train_tendencies=train_tendencies, stride=stride, num_frames=num_frames, 
-                                         num_out_frames=num_out_frames)
+                                         num_out_frames=num_out_frames, target_step_hist=target_step_hist)
     else:
         dataset = TurbulenceDataset(data_dir=data_dir, file_range=file_range, target_step=target_step, 
                                     train_tendencies=train_tendencies, stride=stride, num_frames=num_frames, 
-                                    num_out_frames=num_out_frames)
+                                    num_out_frames=num_out_frames, target_step_hist=target_step_hist)
 
     sampler = DistributedSampler(dataset, shuffle=train) if distributed else None
     if train and not distributed:
@@ -40,7 +40,7 @@ def get_dataloader(data_dir, file_range, target_step, train_tendencies, batch_si
 
 
 class TurbulenceDataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir, file_range, target_step, train_tendencies, stride, num_frames, num_out_frames):
+    def __init__(self, data_dir, file_range, target_step, train_tendencies, stride, num_frames, num_out_frames, target_step_hist):
         """
         Args:
             data_dir (str): Directory with .mat data files.
@@ -50,6 +50,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
             stride (int): Number of steps between samples.
             num_frames (int): Number of time samples for input.
             num_out_frames (int): Number of time samples for output.
+            target_step_hist (int or None): Number of steps for previous samples in input.
         """
         self.data_dir = data_dir
         self.input_file_numbers = list(range(file_range[0] + (num_frames - 1), file_range[1] + 1, stride))
@@ -61,6 +62,10 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.stride = stride
         self.num_frames = num_frames
         self.num_out_frames = num_out_frames
+        if target_step_hist is None:
+            self.target_step_hist = target_step
+        else:
+            self.target_step_hist = target_step_hist
 
         input_mean, input_std = self._get_file_stats(inp=True)
         self.normalize_input = Normalize(input_mean, input_std)
@@ -115,11 +120,11 @@ class TurbulenceDataset(torch.utils.data.Dataset):
 
         inp_tensor, label_tensor = [], []
         for t in range(self.num_frames):
-            file_num = self.input_file_numbers[idx] - t*self.target_step
+            file_num = self.input_file_numbers[idx] - t*self.target_step_hist
             inp_data = self.get_item_input_one_step(file_num)   # output (tensor) shape: [C=2, T=1, X, Y]
             inp_tensor.append(inp_data)
         for t in range(self.num_out_frames):
-            file_num = self.label_file_numbers[idx] - t*self.target_step
+            file_num = self.label_file_numbers[idx] - t*self.target_step_hist
             label_data = self.get_item_label_one_step(file_num)   # output (tensor): [C=2, T=1, X, Y]
             label_tensor.append(label_data)
 
@@ -179,13 +184,13 @@ class TurbulenceDataset(torch.utils.data.Dataset):
 
 
 class TurbulenceMultiDataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir, file_range, target_step, train_tendencies, stride, num_frames, num_out_frames):
+    def __init__(self, data_dir, file_range, target_step, train_tendencies, stride, num_frames, num_out_frames, target_step_hist):
 
         self.datasets = []
         self.dlens = []
         for i in range(data_dir):
             dataset = TurbulenceDataset(data_dir[i], file_range[i], target_step, train_tendencies, stride, num_frames,
-                                         num_out_frames)
+                                         num_out_frames, target_step_hist)
             self.datasets.append(dataset)
             self.dlens.append(len(dataset))
 

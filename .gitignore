@@ -1,2 +1,4 @@
 src/wandb/
 __pycache__/
+eval/run_analysis.sh
+**/*.pyc
