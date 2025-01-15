@@ -137,9 +137,28 @@ def manual_eof(X_demeaned, n_comp=1):
 
     # Calculate the explained variance
     total_variance = np.sum(eigenvalues)
-    explained_variance = eigenvalues[:n_comp] / total_variance
+    explained_variance = eigenvalues / total_variance
 
-    return EOFs_manual, PCs_manual, explained_variance
+    return EOFs_manual, PCs_manual, np.flip(explained_variance)[:3]
+
+# Method 2: Manual calculation of EOFs and PCs using SVD
+def manual_svd_eof(X_demeaned):
+
+    # Step 2: Apply SVD on the demeaned data
+    # U: left singular vectors (PCs)
+    # s: singular values
+    # Vt: right singular vectors (EOFs, transposed)
+    U, s, Vt = np.linalg.svd(X_demeaned, full_matrices=False)
+    
+    # Step 3: Extract the first three EOFs and PCs
+    EOFs_svd = Vt.T    # EOFs and transpose to shape (N, 3)
+    PCs_svd = U * s # Scale U by the singular values to get PCs
+    
+    # Step 4: Calculate explained variance
+    total_variance = np.sum(s ** 2)
+    explained_variance = (s ** 2) / total_variance
+    
+    return EOFs_svd, PCs_svd, explained_variance
 
 def get_div(U, V):
     """

@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 from scipy.io import loadmat
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import imageio
 
@@ -9,7 +10,7 @@ from py2d.initialize import initialize_wavenumbers_rfft2, gridgen
 from py2d.derivative import derivative
 from py2d.convert import UV2Omega, Omega2UV
 
-from analysis.metrics import manual_eof, divergence
+from analysis.metrics import manual_eof, manual_svd_eof, divergence
 from analysis.rollout import n_step_rollout
 from analysis.io_utils import load_numpy_data, get_npy_files, get_mat_files_in_range
 
@@ -116,9 +117,10 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 Omega_min.append(np.min(Omega))
 
         if long_analysis_params["temporal_mean"]:
-            U_mean = U_mean_temp/long_analysis_params["analysis_length"]
-            V_mean = V_mean_temp/long_analysis_params["analysis_length"]
-            Omega_mean = Omega_mean_temp/long_analysis_params["analysis_length"]
+
+            U_mean_temp = U_mean_temp/len(files)
+            V_mean_temp = V_mean_temp/len(files)
+            Omega_mean_temp = Omega_mean_temp/len(files)
 
             np.savez(os.path.join(analysis_dir_save, 'temporal_mean.npz'), U_mean=U_mean, V_mean=V_mean, Omega_mean=Omega_mean)
 
@@ -132,6 +134,23 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
             Omega_zonal_anom = np.array(Omega_zonal) - Omega_zonal_mean
             EOF_Omega, PC_Omega, exp_var_Omega = manual_eof(Omega_zonal_anom, long_analysis_params["eof_ncomp"])
 
+            # ## Scikit-learn
+
+            # pca = PCA(n_components=long_analysis_params["eof_ncomp"])
+            # PC_U_sklearn = pca.fit_transform(U_zonal_anom)
+            # EOF_U_sklearn = pca.components_.T
+            # expvar_U_sklearn = pca.explained_variance_ratio_
+
+            # pca = PCA(n_components=long_analysis_params["eof_ncomp"])
+            # PC_Omega_sklearn = pca.fit_transform(Omega_zonal_anom)
+            # EOF_Omega_sklearn = pca.components_.T
+            # expvar_Omega_sklearn = pca.explained_variance_ratio_
+
+            # ## SVD
+            # EOF_U_svd, PC_U_svd, expvar_U_svd = manual_svd_eof(U_zonal_anom)
+            # EOF_Omega_svd, PC_Omega_svd, expvar_Omega_svd = manual_svd_eof(Omega_zonal_anom)
+
+            # np.savez(os.path.join(analysis_dir_save, 'zonal_eof.npz'), EOF_U=EOF_U, PC_U=PC_U, exp_var_U=exp_var_U, EOF_Omega=EOF_Omega, PC_Omega=PC_Omega, exp_var_Omega=exp_var_Omega, EOF_U_sklearn=EOF_U_sklearn, PC_U_sklearn=PC_U_sklearn, expvar_U_sklearn=expvar_U_sklearn, EOF_Omega_sklearn=EOF_Omega_sklearn, PC_Omega_sklearn=PC_Omega_sklearn, expvar_Omega_sklearn=expvar_Omega_sklearn, EOF_U_svd=EOF_U_svd, PC_U_svd=PC_U_svd, expvar_U_svd=expvar_U_svd, EOF_Omega_svd=EOF_Omega_svd, PC_Omega_svd=PC_Omega_svd, expvar_Omega_svd=expvar_Omega_svd)
             np.savez(os.path.join(analysis_dir_save, 'zonal_eof.npz'), EOF_U=EOF_U, PC_U=PC_U, exp_var_U=exp_var_U, EOF_Omega=EOF_Omega, PC_Omega=PC_Omega, exp_var_Omega=exp_var_Omega)
             np.savez(os.path.join(analysis_dir_save, 'zonal_mean.npz'), U_zonal_mean=U_zonal_mean, Omega_zonal_mean=Omega_zonal_mean)
 

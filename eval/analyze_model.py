@@ -90,6 +90,14 @@ def main(config):
     model.load_state_dict(ckpt)
     model.eval()
 
+    # Directory to saved emulated data and analysis
+    save_dir = os.path.join(root_dir, 'data')  # or create a separate directory if desired
+    analysis_dir = os.path.join(root_dir, 'analysis')
+    plot_dir = os.path.join(root_dir, 'plots')
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(analysis_dir, exist_ok=True)
+    os.makedirs(plot_dir, exist_ok=True)
+
     # Initiate dataloaders
     test_file_range = (test_file_start_idx, test_file_start_idx+(test_length_short*num_tests*train_params["target_step"])-1)
     dataloader, dataset = get_dataloader(data_dir=train_params["data_dir"],
@@ -134,12 +142,6 @@ def main(config):
         print('short analysis performed')
     else:
         print('No short analysis requested')
-
-    # Directory to saved emulated data and analysis
-    save_dir = os.path.join(root_dir, 'data')  # or create a separate directory if desired
-    analysis_dir = os.path.join(root_dir, 'analysis')
-    os.makedirs(save_dir, exist_ok=True)
-    os.makedirs(analysis_dir, exist_ok=True)
 
     # Number of files to be saved
     save_data_length = np.maximum(long_analysis_params["save_data_length"], long_analysis_params["analysis_length"])
@@ -215,9 +217,10 @@ def main(config):
 
 if __name__ == "__main__":
     # Load the configuration file
-    with open("config/config.yaml", "r") as f:
+
+    config_filename = str(sys.argv[1])
+    with open("config/" + config_filename, "r") as f:
         config = yaml.safe_load(f)
 
     # Pass the entire config dictionary to main
     main(config)
-

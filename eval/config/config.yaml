@@ -10,23 +10,24 @@ short_analysis_params:
   rmse: !!bool True
   acc: !!bool True
   spectra: !!bool True
-  spectra_leadtimes: [0, 2, 4]
-  analysis_length: 5 # number of training timesteps
-  num_ensembles: 2
+  spectra_leadtimes: [0, 5, 10, 99]
+  analysis_length: 100 # number of training timesteps
+  num_ensembles: 10
   test_file_start_idx: 350000
-  test_length_climo: 5
+  test_length_climo: 1000
 
 long_analysis_params:
 # Data would be saved to perform any long analysis
 # Run plots.ipynb to generate and save plots
-  save_data_length: 100 # number of training timesteps emulated and saved
-  analysis_length: 100 # number of training timesteps emulated for analysis
+  save_data_length: 20000 # number of training timesteps emulated and saved
+  analysis_length: 20000 # number of training timesteps emulated for analysis
   temporal_mean: !!bool True
   zonal_mean: !!bool True
   zonal_eof: !!bool True
   eof_ncomp: 3
   div: !!bool True
-  return_period: !!bool False
-  video: !!bool False
-  video_length: 100
+  return_period: !!bool True
+  PDF: !!bool False # U Omega, V
+  video: !!bool True
+  video_length: 1000
 
