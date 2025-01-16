@@ -19,7 +19,7 @@ from src.utils.data_loaders import get_dataloader
 from analysis.short_analysis import perform_short_analysis
 from analysis.long_analysis import perform_long_analysis
 from analysis.io_utils import load_params, get_npy_files
-from analysis.rollout import n_step_rollout
+from analysis.rollout import n_step_rollout, single_step_rollout
 
 logging.basicConfig(level=logging.INFO)
 
@@ -183,8 +183,9 @@ def main(config):
         ic = inp[0].unsqueeze(dim=0)
         print('IC -- ', ic.shape)
         for i in range(rollout_length):
-            pred = n_step_rollout(model, ic, n=1, train_tendencies=train_params["train_tendencies"])
-            ic = pred.clone()
+            pred, ic = single_step_rollout(model, ic, train_tendencies=train_params["train_tendencies"])
+            # ic = pred.clone()
+
             print(f'#{i} ic shape {ic.shape} -- Pred {pred.shape} ')
 
             pred_np = pred.clone().transpose(-1,-2).squeeze().detach().cpu().numpy()

@@ -118,9 +118,9 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
 
         if long_analysis_params["temporal_mean"]:
 
-            U_mean_temp = U_mean_temp/len(files)
-            V_mean_temp = V_mean_temp/len(files)
-            Omega_mean_temp = Omega_mean_temp/len(files)
+            U_mean = U_mean_temp/len(files)
+            V_mean = V_mean_temp/len(files)
+            Omega_mean = Omega_mean_temp/len(files)
 
             np.savez(os.path.join(analysis_dir_save, 'temporal_mean.npz'), U_mean=U_mean, V_mean=V_mean, Omega_mean=Omega_mean)
 
