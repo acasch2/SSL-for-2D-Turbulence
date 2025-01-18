@@ -10,7 +10,7 @@ from py2d.initialize import initialize_wavenumbers_rfft2, gridgen
 from py2d.derivative import derivative
 from py2d.convert import UV2Omega, Omega2UV
 
-from analysis.metrics import manual_eof, manual_svd_eof, divergence
+from analysis.metrics import manual_eof, manual_svd_eof, divergence, PDF_compute
 from analysis.rollout import n_step_rollout
 from analysis.io_utils import load_numpy_data, get_npy_files, get_mat_files_in_range
 
@@ -49,6 +49,7 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
             analysis_dir_save = os.path.join(analysis_dir, 'emulate')
 
         elif dataset == 'train':
+            # Load training data
             files = get_mat_files_in_range(os.path.join(train_params["data_dir"],'data'), train_params["train_file_range"])
             print(f"Number of saved training .mat files: {len(files)}")
             analysis_dir_save = os.path.join(analysis_dir, 'train')
@@ -68,12 +69,17 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
         V_min = []
         Omega_max = []
         Omega_min = []
+        Omega_arr = []
+        U_arr = []
 
         for i, file in enumerate(files):
             # if dataset == 'emulate' and i > long_analysis_params["analysis_length"]:
             #     break
             if i > long_analysis_params["analysis_length"]:
+                total_files_analyzed = i # i starts from 0 total_files_analyzed = (i+1)-1
                 break
+            else:
+                total_files_analyzed = i+1
 
             if i%100 == 0:
                 print(f'File {i}/{ long_analysis_params["analysis_length"]}')
@@ -91,6 +97,11 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 Omega = data['Omega'].T
                 U_transpose, V_transpose = Omega2UV(Omega.T, Kx, Ky, invKsq, spectral = False)
                 U, V = U_transpose.T, V_transpose.T
+
+            ## dataset should be float 32 as geenrated by the emulator
+            U = U.astype(np.float32)
+            V = V.astype(np.float32)
+            Omega = Omega.astype(np.float32)
 
             if long_analysis_params["temporal_mean"]:
                 U_mean_temp += U
@@ -116,11 +127,18 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 Omega_max.append(np.max(Omega))
                 Omega_min.append(np.min(Omega))
 
+            if long_analysis_params['PDF']:
+                # Calculating PDF will may need large memory
+                Omega_arr.append(Omega)
+                U_arr.append(U)
+
         if long_analysis_params["temporal_mean"]:
 
-            U_mean = U_mean_temp/len(files)
-            V_mean = V_mean_temp/len(files)
-            Omega_mean = Omega_mean_temp/len(files)
+            U_mean = U_mean_temp/total_files_analyzed
+            V_mean = V_mean_temp/total_files_analyzed
+            Omega_mean = Omega_mean_temp/total_files_analyzed
+
+            print('mean', dataset, total_files_analyzed)
 
             np.savez(os.path.join(analysis_dir_save, 'temporal_mean.npz'), U_mean=U_mean, V_mean=V_mean, Omega_mean=Omega_mean)
 
@@ -151,15 +169,55 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
             # EOF_Omega_svd, PC_Omega_svd, expvar_Omega_svd = manual_svd_eof(Omega_zonal_anom)
 
             # np.savez(os.path.join(analysis_dir_save, 'zonal_eof.npz'), EOF_U=EOF_U, PC_U=PC_U, exp_var_U=exp_var_U, EOF_Omega=EOF_Omega, PC_Omega=PC_Omega, exp_var_Omega=exp_var_Omega, EOF_U_sklearn=EOF_U_sklearn, PC_U_sklearn=PC_U_sklearn, expvar_U_sklearn=expvar_U_sklearn, EOF_Omega_sklearn=EOF_Omega_sklearn, PC_Omega_sklearn=PC_Omega_sklearn, expvar_Omega_sklearn=expvar_Omega_sklearn, EOF_U_svd=EOF_U_svd, PC_U_svd=PC_U_svd, expvar_U_svd=expvar_U_svd, EOF_Omega_svd=EOF_Omega_svd, PC_Omega_svd=PC_Omega_svd, expvar_Omega_svd=expvar_Omega_svd)
-            np.savez(os.path.join(analysis_dir_save, 'zonal_eof.npz'), EOF_U=EOF_U, PC_U=PC_U, exp_var_U=exp_var_U, EOF_Omega=EOF_Omega, PC_Omega=PC_Omega, exp_var_Omega=exp_var_Omega)
-            np.savez(os.path.join(analysis_dir_save, 'zonal_mean.npz'), U_zonal_mean=U_zonal_mean, Omega_zonal_mean=Omega_zonal_mean)
+            np.savez(os.path.join(analysis_dir_save, 'zonal_eof.npz'), EOF_U=EOF_U, PC_U=PC_U, exp_var_U=exp_var_U, EOF_Omega=EOF_Omega, PC_Omega=PC_Omega, exp_var_Omega=exp_var_Omega, long_analysis_params=long_analysis_params, dataset_params=dataset_params)
+            np.savez(os.path.join(analysis_dir_save, 'zonal_mean.npz'), U_zonal_mean=U_zonal_mean, Omega_zonal_mean=Omega_zonal_mean, long_analysis_params=long_analysis_params, dataset_params=dataset_params)
 
         if long_analysis_params["div"]:
-            div = np.array(div)
+            div = np.array(div, dtype=np.float32) # Torch Emulator data is float32
             np.save(os.path.join(analysis_dir_save, 'div'), div)
 
         if long_analysis_params["return_period"]:
-            np.savez(os.path.join(analysis_dir_save, 'extremes.npz'), U_max=np.asarray(U_max), U_min=np.asarray(U_min), V_max=np.asarray(V_max), V_min=np.asarray(V_min), Omega_max=np.asarray(Omega_max), Omega_min=np.asarray(Omega_min))
+            np.savez(os.path.join(analysis_dir_save, 'extremes.npz'), U_max=np.asarray(U_max), U_min=np.asarray(U_min), V_max=np.asarray(V_max), V_min=np.asarray(V_min), Omega_max=np.asarray(Omega_max), Omega_min=np.asarray(Omega_min), long_analysis_params=long_analysis_params, dataset_params=dataset_params)
+
+        if long_analysis_params["PDF"]:
+            Omega_arr = np.array(Omega_arr)
+            Omega_mean, Omega_std, Omega_pdf, Omega_bins, bw_scott = PDF_compute(Omega_arr)
+
+            U_arr = np.array(U_arr)
+            U_mean, U_std, U_pdf, U_bins, bw_scott = PDF_compute(U_arr)
+
+            np.savez(os.path.join(analysis_dir_save, 'pdf.npz'), Omega_mean=Omega_mean, Omega_std=Omega_std, Omega_pdf=Omega_pdf, Omega_bins=Omega_bins, bw_scott=bw_scott, U_mean=U_mean, U_std=U_std, U_pdf=U_pdf, U_bins=U_bins, long_analysis_params=long_analysis_params, dataset_params=dataset_params)
+
+
+    import nbformat
+    from nbconvert import PythonExporter
+
+    def run_notebook_as_script(notebook_path):
+        """
+        Executes a Jupyter Notebook file (.ipynb) as a Python script.
+        
+        Args:
+            notebook_path (str): Path to the Jupyter Notebook file.
+        """
+        # Load the notebook
+        with open(notebook_path, 'r', encoding='utf-8') as f:
+            notebook = nbformat.read(f, as_version=4)
+        
+        # Convert notebook to Python script
+        exporter = PythonExporter()
+        python_code, _ = exporter.from_notebook_node(notebook)
+        
+        # Execute the script
+        exec(python_code, globals())
+
+    # Path to your Jupyter Notebook
+    notebook_file = "plot.ipynb"
+
+    # Ensure the notebook file exists
+    if os.path.exists(notebook_file):
+        run_notebook_as_script(notebook_file)
+    else:
+        print(f"Notebook file {notebook_file} not found!")
 
     if long_analysis_params["video"]:
 

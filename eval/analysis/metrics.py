@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import gaussian_kde
 
 from py2d.initialize import initialize_wavenumbers_rfft2, gridgen
 from py2d.derivative import derivative
@@ -203,3 +204,56 @@ def divergence(U, V):
     div = Ux + Vy
 
     return div
+
+def PDF_compute(data, bw_factor=1):
+    data_arr = np.array(data).flatten()
+    del data
+
+    # Calculate mean and standard deviation
+    data_mean, data_std = np.mean(data_arr), np.std(data_arr)
+
+    # Define bins within 10 standard deviations from the mean, but also limit them within the range of the data
+    bin_max = np.min(np.abs([np.min(data_arr), np.max(data_arr)]))
+    bin_min = -bin_max
+    bins = np.linspace(bin_min, bin_max, 100)
+
+    print('PDF Clculation')
+    print('bin min', bin_min)
+    print('bin max', bin_max)
+    print('data Shape', data_arr.shape)
+    print('data mean', data_mean)
+    print('data_std', data_std)
+    print('Total nans', np.sum(np.isnan(data_arr)))
+
+    # Compute PDF using Scipy
+    bw1 = bw_factor*(data_arr.shape[0])**(-1/5) # custom bw method scott method n**(-1/5)
+    kde = gaussian_kde(data_arr, bw_method=bw1)
+
+    # # Define a range over which to evaluate the density
+    data_bins = bins
+    bw_scott = kde.factor
+    # # Evaluate the density over the range
+    data_pdf = kde.evaluate(data_bins)
+
+    return data_mean, data_std, data_pdf, data_bins, bw_scott
+
+def return_period(data, dt=1, bins=50, bin_range=None):
+    '''
+    Return period for a time series data
+    Inverse of the exceedance probability
+    '''
+    # Compute histogram frequencies and bin edges
+    freq, bin_edges = np.histogram(data, bins=bins, range=bin_range)
+    # Compute bin centers
+    bins_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+    # Compute cumulative frequencies from the highest bin downwards
+    freq_exceedance = np.cumsum(freq[::-1])[::-1]
+    # Total number of data points
+    total_data_points = len(data)
+    # Calculate exceedance probabilities
+    prob_exceedance = freq_exceedance / total_data_points
+    # Avoid division by zero in return period calculation
+    prob_exceedance = np.clip(prob_exceedance, 1e-14, 1)
+    # Calculate return periods
+    return_periods = dt / prob_exceedance
+    return return_periods, prob_exceedance, bins_centers

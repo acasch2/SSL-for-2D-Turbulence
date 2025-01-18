@@ -37,7 +37,6 @@ def main(config):
     root_dir = os.path.join(dataset_params["root_dir"], run_num)
     model_filename = dataset_params["model_filename"]
     params_filename = dataset_params["params_filename"]
-    train_file_range = dataset_params["train_file_range"]
 
     # Short analysis parameters
     rmse = short_analysis_params["rmse"]
