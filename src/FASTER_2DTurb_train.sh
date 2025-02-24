@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --time=3-00:00:00
+#SBATCH --time=4-00:00:00
 #SBATCH -N 1
 #SBATCH --ntasks=2
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=250G
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a30:2
+#SBATCH --gres=gpu:a40:2
 #SBATCH --output=/scratch/user/u.dp200518/Logfiles/2DTurb_Base_%x.out
 
 #SBATCH --account=145439188689
@@ -33,9 +33,9 @@ source $HOME/set_wandb_key_dpp94.sh
 # ------ Define all input args ------ #
 
 YAML_CONFIG=/home/u.dp200518/SSL-Wavelets/src/config/vitnet.yaml
-CONFIG=BASE
+CONFIG=MAE_FINETUNE
 
 
 # ------ Run main script ------ #
 
-torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} train.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start
+torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} mae_finetune.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start

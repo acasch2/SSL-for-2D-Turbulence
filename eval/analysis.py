@@ -228,7 +228,7 @@ def make_video(pred, tar):
         fig.subplots_adjust(right=0.85)
         cbar_ax = fig.add_axes([0.9, 0.15, 0.05, 0.7])
         fig.colorbar(im, cax=cbar_ax)
-        fig.suptitle(f'{t+1}$\Delta t$')
+        fig.suptitle(rf'{t+1}$\Delta t$')
         fig.savefig('temp_frame.png', bbox_inches='tight')
         plt.close()
 
@@ -437,7 +437,7 @@ def plot_analysis(results, analysis_dict):
         lower = results['rmse_u_per_lq'] # - results['rmse_u_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('RMSE')
-        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([0, 3.5])
         ax.set_xlim([0, 100])
         ax.legend()
@@ -454,7 +454,7 @@ def plot_analysis(results, analysis_dict):
         lower = results['rmse_v_per_lq'] # - results['rmse_v_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('RMSE')
-        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([0, 3.5])
         ax.set_xlim([0, 100])
         ax.legend()
@@ -474,7 +474,7 @@ def plot_analysis(results, analysis_dict):
         lower = results['acc_u_per_lq'] # - results['acc_u_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('ACC')
-        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([-1, 1])
         ax.set_xlim([0, 100])
         ax.legend()
@@ -491,7 +491,7 @@ def plot_analysis(results, analysis_dict):
         lower = results['acc_v_per_lq'] # - results['acc_v_per_std']
         ax.fill_between(x, lower, upper, color='k', alpha=0.1)
         ax.set_ylabel('ACC')
-        ax.set_xlabel(r'Lead time ($\Delta t$)')
+        ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([-1, 1])
         ax.set_xlim([0, 100])
         ax.legend()
@@ -504,7 +504,7 @@ def plot_analysis(results, analysis_dict):
         ax.plot(x, results['spectra_tar'][0], '-k', label='Truth')
         for lead in analysis_dict['spectra_leadtimes']:
             spec = results['spectra'][lead]
-            label = f'{lead+1}$\Delta t$' 
+            label = rf'{lead+1}$\Delta t$' 
             ax.plot(x, spec, label=label)
             ax.set_xscale('log')
             ax.set_yscale('log')
@@ -644,10 +644,10 @@ def main(root_dir, model_filename, params_filename, test_length, num_tests, test
 # ================================================================================ #
 
 # File Paths
-root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/BASE/0031/'
-model_filename = 'training_checkpoints/ckpt_450.tar' #ckpt_200.tar best_ckpt.tar'
+root_dir = '/scratch/user/u.dp200518/SSL-2DTurb/MAE_FINETUNE/xxx1/'
+model_filename = 'training_checkpoints/best_ckpt.tar' #ckpt_200.tar best_ckpt.tar'
 params_filename = 'hyperparams.yaml'
-run_num = '0031_epoch450'
+run_num = 'mae_ft_xxx1'
 
 # Test Parameters
 test_length = 100   # will be batch size

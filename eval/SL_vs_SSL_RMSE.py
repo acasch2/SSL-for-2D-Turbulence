@@ -27,7 +27,7 @@ def main(config, ckpt_root, run_num, ckpts, leadtimes):
         results_SSL[ckpt] = analyze_model.main(config)
 
     # SL vs SSL comparison
-    fig, axs = plt.subplots(nrows=3, ncols=3,
+    fig, axs = plt.subplots(nrows=2, ncols=3,
                             sharex=True, sharey=True)
     axs = axs.flatten()
 
