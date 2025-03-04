@@ -284,7 +284,11 @@ class Trainer():
             # Profile
             #with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
             #    with record_function("model inference"):
-            
+        
+            # Add noise
+            #noise = 0.1 * (2 * torch.rand(inputs.shape) - 1)
+            #inputs += noise
+
             outputs = self.model(inputs, train=True)
             
             if dist.is_initialized():

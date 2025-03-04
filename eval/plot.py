@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import yaml
 
-config_file_path = "config/config_0031.yaml"
+config_file_path = "config/config_video_v1_PM.yaml"
 with open(config_file_path, "r") as f:
     config = yaml.safe_load(f)
 
@@ -13,9 +13,12 @@ long_analysis_params = config["long_analysis_params"]
 
 analysis_dir = os.path.join(dataset_params["root_dir"], dataset_params["run_num"], "analysis")
 analysis_dir_train = os.path.join(analysis_dir, "train")
+print(f'Ground truth from: {analysis_dir_train}')
 analysis_dir_emulate = os.path.join(analysis_dir, "emulate")
+print(f'Emulation from: {analysis_dir_emulate}')
 
 plt_save_dir = os.path.join(dataset_params["root_dir"], dataset_params["run_num"], "plots")
+print(f'Save plots to: {plt_save_dir}')
 os.makedirs(plt_save_dir, exist_ok=True)
 
 
@@ -44,7 +47,7 @@ axes[0,0].set_title("U Truth")
 axes[0,1].contourf(U_emulate, levels=contourlevels, cmap='bwr', vmax=vmax, vmin=-vmax)
 axes[0,1].set_title("U ML")
 
-axes[0,2].contourf(U_emulate - U_train, levels=contourlevels, cmap='bwr')
+axes[0,2].contourf(U_emulate - U_train, levels=contourlevels, cmap='bwr', vmax=vmax, vmin=-vmax)
 axes[0,2].set_title("U Truth - U ML")
 
 vmax = np.max(V_train)
@@ -54,7 +57,7 @@ axes[1,0].set_title("V Truth")
 axes[1,1].contourf(V_emulate, levels=contourlevels, cmap='bwr', vmax=vmax, vmin=-vmax)
 axes[1,1].set_title("V ML")
 
-axes[1,2].contourf(V_emulate - V_train, levels=contourlevels, cmap='bwr')
+axes[1,2].contourf(V_emulate - V_train, levels=contourlevels, cmap='bwr', vmax=vmax, vmin=-vmax)
 axes[1,2].set_title("V Truth - V ML")
 
 vmax = np.max(Omega_train)
@@ -64,7 +67,7 @@ axes[2,0].set_title("Omega Truth")
 axes[2,1].contourf(Omega_emulate, levels=contourlevels, cmap='bwr', vmax=vmax, vmin=-vmax)
 axes[2,1].set_title("Omega ML")
 
-axes[2,2].contourf(Omega_emulate - Omega_train, levels=contourlevels, cmap='bwr')
+axes[2,2].contourf(Omega_emulate - Omega_train, levels=contourlevels, cmap='bwr', vmax=vmax, vmin=-vmax)
 axes[2,2].set_title("Omega Truth - Omega ML")
 
 # Set aspect ratio to equal and remove labels for all axes

@@ -207,6 +207,8 @@ def main(config):
     if long_analysis_params["zonal_eof"] or long_analysis_params["div"] or long_analysis_params["video"] or long_analysis_params["return_period"] or long_analysis_params["temporal_mean"] or long_analysis_params["zonal_mean"]:
         perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_params, train_params)
         print('long analysis performed')
+        print(f'save_dir: {save_dir}')
+        print(f'analysis_dir: {analysis_dir}')
     else:
         print('No long analysis requested')
 
