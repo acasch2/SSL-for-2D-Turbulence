@@ -96,9 +96,16 @@ class Trainer():
             #        del checkpoint_model[k]
             for key, val in state_dict.items():
                 if key in checkpoint_model.keys() and val.shape != checkpoint_model[key].shape:
-                    print(f'Removing key {key} from pretrained checkpoint.')
+                    print(f'Removing key {key} from pretrained checkpoint due to shape mismatch.')
                     del checkpoint_model[key]
 
+            # Drop decoder from pretrained checkpoint
+            for key, val in state_dict.items():
+                for layer in params['drop_layers']:
+                    if layer in key:
+                        print(f'Removing DECODER key {key} from pretrained checkpoint.')
+                        del checkpoint_model[key]
+        
             msg = self.model.load_state_dict(checkpoint_model, strict=False)
             print(msg)
 
@@ -290,7 +297,7 @@ class Trainer():
             #inputs += noise
 
             outputs = self.model(inputs, train=True)
-            
+           
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
             else:

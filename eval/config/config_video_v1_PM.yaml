@@ -1,5 +1,5 @@
 dataset_params:
-  run_num: "0000"
+  run_num: "current_best_video"
   root_dir: "/pscratch/sd/d/dpp94/SSL-2DTurb/BASE/"
   model_filename: "training_checkpoints/best_ckpt.tar"
   params_filename: "hyperparams.yaml"
@@ -15,19 +15,19 @@ short_analysis_params:
   num_ensembles: 50
   test_file_start_idx: 350000
   test_length_climo: 1000
-  plot_analysis: True
+  plot_analysis: False
 
 long_analysis_params:
 # Data would be saved to perform any long analysis
 # Run plots.ipynb to generate and save plots
-  save_data_length: 100000 # number of training timesteps emulated and saved
-  analysis_length: 100000 # number of training timesteps emulated for analysis
-  temporal_mean: !!bool True
-  zonal_mean: !!bool True
-  zonal_eof: !!bool True
+  save_data_length: 1 # number of training timesteps emulated and saved
+  analysis_length: 1 # number of training timesteps emulated for analysis
+  temporal_mean: !!bool False
+  zonal_mean: !!bool False
+  zonal_eof: !!bool False
   eof_ncomp: 3
-  div: !!bool True
-  return_period: !!bool True
+  div: !!bool False
+  return_period: !!bool False
   PDF: !!bool False # U Omega, V
-  video: !!bool True
+  video: !!bool False
   video_length: 200

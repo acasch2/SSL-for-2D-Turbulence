@@ -62,7 +62,7 @@ MAE_PRETRAIN: &MAE_PRETRAIN
     log_to_wandb: !!bool False #True
     project: 'SSL-2DTurb'
     group: 'Dhruvit-mae-pretrain'
-    name: '0000_mae_mr0.5'
+    name: '0000'
     diagnostic_logs: !!bool True
 
     ckpt_epoch_list: []
@@ -88,7 +88,7 @@ MAE_FINETUNE: &MAE_FINETUNE
     log_to_wandb: !!bool False
     project: 'SSL-2DTurb'
     group: 'Dhruvit-mae-finetune'
-    name: '0000_mae_mr0.9'
+    name: '0002_mae_mr0.5_ts1'
     diagnostic_logs: !!bool True
 
     ckpt_epoch_list: [1, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
@@ -107,5 +107,6 @@ MAE_FINETUNE: &MAE_FINETUNE
     num_out_frames: 1
 
     mae_finetune: True
-    mae_finetune_fp: '/pscratch/sd/d/dpp94/SSL-2DTurb/MAE_PRETRAIN/0000_mae_mr0.9/training_checkpoints/best_ckpt.tar'
+    mae_finetune_fp: '/pscratch/sd/d/dpp94/SSL-2DTurb/MAE_PRETRAIN/0002/training_checkpoints/best_ckpt.tar'
     freeze_layers: [] #['encoder', 'patch_embed']   
+    drop_layers: [] #['decoder', 'patchrecovery']
