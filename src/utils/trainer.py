@@ -8,7 +8,7 @@ import logging
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
-from utils.diagnostics import grad_norm, grad_max
+from utils.diagnostics import grad_norm, grad_max, log_input_target_prediction
 #from torch.profiler import profile, record_function, ProfilerActivity
 
 #torch.backends.cuda.enable_flash_sdp(True)
@@ -59,6 +59,8 @@ class Trainer():
             epoch_metrics = ['lr', 'train_loss', 'val_loss']
             for metric in epoch_metrics:
                 wandb.define_metric(metric, step_metric="epoch")
+            
+            self.wandb_table = wandb.Table(columns=['Id', 'Input', 'Target', 'Prediction', 'Target-Prediction'])
             
 
         # Construct model
@@ -384,6 +386,14 @@ class Trainer():
                 self.val_pred = outputs
 
                 valid_loss += loss
+
+                if self.params.log_to_wandb:
+                    if (self.epoch % self.params.wandb_table_logging_interval == 1) and (i == 0):
+                        logging.info("Logging validation [input, target, prediction] to wandb table.")
+                        _wandb_table = wandb.Table(columns=self.wandb_table.columns, data=self.wandb_table.data)
+                        _wandb_table = log_input_target_prediction(inputs, labels, outputs, _wandb_table, self.epoch)
+                        wandb.log({f"EPOCH {self.epoch} Validation Input/Target/Prediction" : _wandb_table})
+                        #self.wandb_table = _wandb_table
 
         valid_time = time.time() - valid_start
 

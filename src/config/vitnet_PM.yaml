@@ -6,6 +6,7 @@ BASE: &BASE
 
     log_to_screen: !!bool True
     log_to_wandb: !!bool False #True
+    wandb_table_logging_interval: 10
     project: 'SSL-2DTurb'
     group: 'Dhruvit-base-emulator'
     name: '0000'
@@ -60,6 +61,7 @@ MAE_PRETRAIN: &MAE_PRETRAIN
 
     log_to_screen: !!bool True
     log_to_wandb: !!bool False #True
+    wandb_table_logging_interval: 10
     project: 'SSL-2DTurb'
     group: 'Dhruvit-mae-pretrain'
     name: '0000'
@@ -85,10 +87,11 @@ MAE_FINETUNE: &MAE_FINETUNE
     <<: *MAE_PRETRAIN
 
     log_to_screen: !!bool True
-    log_to_wandb: !!bool False
+    log_to_wandb: !!bool True
+    wandb_table_logging_interval: 10
     project: 'SSL-2DTurb'
     group: 'Dhruvit-mae-finetune'
-    name: '0002_mae_mr0.5_ts1'
+    name: 'testing_diagnostics'
     diagnostic_logs: !!bool True
 
     ckpt_epoch_list: [1, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
