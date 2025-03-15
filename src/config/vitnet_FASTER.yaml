@@ -8,13 +8,14 @@ BASE: &BASE
     log_to_wandb: !!bool False #True
     project: 'SSL-2DTurb'
     group: 'Dhruvit-base-emulator'
-    name: '0023'
+    name: '0031'
     diagnostic_logs: !!bool True
 
     fresh_start: True
     early_stopping: !!bool False
 
     save_checkpoint: !!bool True
+    ckpt_epoch_list: [25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
 
     train_file_range: [200000, 220000]
     valid_file_range: [310000, 312000]
@@ -29,7 +30,7 @@ BASE: &BASE
     warmup: !!bool True
     warmup_startfactor: 0.001 
     warmup_totaliters: 3
-    weight_decay: 1e-8
+    weight_decay: 1e-7
     max_epochs: 500
     checkpointing: !!bool False #True
 
@@ -51,40 +52,59 @@ BASE: &BASE
     patch_recovery: "subpixel_conv"  #["linear", "conv", "subpixel_conv"]
 
     mae_finetune: False
-    mae_finetune_fp: '/scratch/user/u.dp200518/ML_Weights/MAE_Pretrain/TS0_NF1_LRSNone_200epochs_small.pt'
-    freeze_layers: ['encoder']
-
 
 
 MAE_PRETRAIN: &MAE_PRETRAIN
     <<: *BASE
 
-    target_step: 0
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool False #True
+    project: 'SSL-2DTurb'
+    group: 'Dhruvit-mae-pretrain'
+    name: '0006'
+    diagnostic_logs: !!bool True
 
-    train_tendencies: !!bool False
+    ckpt_epoch_list: []
 
-    num_frames: 3
-    tubelet_size: 3
-    num_out_frames: 3  
+    target_step: 3
+    target_step_hist: 3
 
-    mask_ratio: 0.75
+    train_file_range: [200000, 220000]
+    valid_file_range: [310000, 312000]
+
+    num_frames: 2
+    tubelet_size: 2
+    num_out_frames: 2  
+
+    mask_ratio: 0.9
 
 
 
 MAE_FINETUNE: &MAE_FINETUNE
-    <<: *BASE
+    <<: *MAE_PRETRAIN
 
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool False
     project: 'SSL-2DTurb'
-    group: 'Dhruvit-MAE-finetune'
-    name: '0004'
+    group: 'Dhruvit-mae-finetune'
+    name: '0006'
+    diagnostic_logs: !!bool True
 
-    train_file_range: [200000, 202000]
-    
-    batch_size: 32
-    max_epochs: 5000
+    ckpt_epoch_list: [25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
 
-    train_tendencies: !!bool False
+    target_step: 3
+    target_step_hist: 3
+
+    train_file_range: [200000, 220000]
+    valid_file_range: [310000, 312000]
+   
+    lr: 5e-4
+    scheduler: 'ReduceLROnPlateau'
+    warmup: !!bool False
+    max_epochs: 500
+
+    num_out_frames: 1
 
     mae_finetune: True
-    mae_finetune_fp: '/scratch/user/u.dp200518/SSL-2DTurb/MAE_PRETRAIN/0001/training_checkpoints/best_ckpt.tar'
-    freeze_layers: [] # ['encoder']   
+    mae_finetune_fp: '/scratch/user/u.dp200518/SSL-2DTurb/MAE_PRETRAIN/0006/training_checkpoints/best_ckpt.tar'
+    freeze_layers: [] #['encoder', 'patch_embed']   

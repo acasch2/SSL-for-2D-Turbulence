@@ -43,6 +43,7 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
         print('-------------- Calculating for dataset: ', dataset)
 
         if dataset == 'emulate':
+
             if long_analysis_params["long_analysis_emulator"]:
                 # Data predicted by the emualtor
                 files = get_npy_files(save_dir)
@@ -85,6 +86,7 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
         V_min = []
         Omega_max = []
         Omega_min = []
+
         Omega_arr = []
         U_arr = []
 
@@ -96,14 +98,12 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 total_files_analyzed = i # i starts from 0 total_files_analyzed = (i+1)-1
                 print('break after analyzing # files ', total_files_analyzed)
                 break
-            else:
                 total_files_analyzed = i+1
 
-            if i%100 == 0:
-                if dataset == 'emulate':
                     print(f'File {i}/{ long_analysis_params["analysis_length"]}')
                 else:
                     print(f'File {i}/{len(files)}')
+
 
             if dataset == 'emulate':
                 data  = np.load(os.path.join(save_dir, file))
@@ -113,7 +113,9 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 Omega = Omega_transpose.T
 
 
+
             elif dataset == 'train' or dataset == 'truth':
+
                 data = loadmat(os.path.join(train_params["data_dir"], 'data', file))
                 Omega = data['Omega'].T
                 U_transpose, V_transpose = Omega2UV(Omega.T, Kx, Ky, invKsq, spectral = False)
@@ -160,6 +162,7 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
             Omega_mean = Omega_mean_temp/total_files_analyzed
 
             print('mean', dataset, total_files_analyzed)
+
 
             np.savez(os.path.join(analysis_dir_save, 'temporal_mean.npz'), U_mean=U_mean, V_mean=V_mean, Omega_mean=Omega_mean)
 

@@ -66,8 +66,10 @@ if __name__=='__main__':
     
     params['experiment_dir'] = os.path.abspath(expDir)
     ckpt_path = 'training_checkpoints/ckpt.tar'
+    ckpt_epoch_path = 'training_checkpoints/ckpt'
     best_ckpt_path = 'training_checkpoints/best_ckpt.tar'
     params['checkpoint_path'] = os.path.join(expDir, ckpt_path)
+    params['checkpoint_epoch_path'] = os.path.join(expDir, ckpt_epoch_path)
     params['best_checkpoint_path'] = os.path.join(expDir, best_ckpt_path)
 
 

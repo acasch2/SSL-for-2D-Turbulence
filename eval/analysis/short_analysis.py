@@ -70,6 +70,20 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
 
     # Aggregate results
     if rmse_flag:
+
+        results['rmse_u_median'] = np.quantile(np.stack(rmse_u, axis=0), 0.5, axis=0)
+        results['rmse_u_uq'] = np.quantile(np.stack(rmse_u, axis=0), 0.75, axis=0)
+        results['rmse_u_lq'] = np.quantile(np.stack(rmse_u, axis=0), 0.25, axis=0)
+        results['rmse_u_per_median'] = np.quantile(np.stack(rmse_u_per, axis=0), 0.5, axis=0)
+        results['rmse_u_per_uq'] = np.quantile(np.stack(rmse_u_per, axis=0), 0.75, axis=0)
+        results['rmse_u_per_lq'] = np.quantile(np.stack(rmse_u_per, axis=0), 0.25, axis=0)
+        results['rmse_v_median'] = np.quantile(np.stack(rmse_v, axis=0), 0.5, axis=0)
+        results['rmse_v_uq'] = np.quantile(np.stack(rmse_v, axis=0), 0.75, axis=0)
+        results['rmse_v_lq'] = np.quantile(np.stack(rmse_v, axis=0), 0.25, axis=0)
+        results['rmse_v_per_median'] = np.quantile(np.stack(rmse_v_per, axis=0), 0.5, axis=0)
+        results['rmse_v_per_uq'] = np.quantile(np.stack(rmse_v_per, axis=0), 0.75, axis=0)
+        results['rmse_v_per_lq'] = np.quantile(np.stack(rmse_v_per, axis=0), 0.25, axis=0)
+
         results['rmse_u_mean'] = np.mean(rmse_u, axis=0)
         results['rmse_u_std'] = np.std(rmse_u, axis=0)
         results['rmse_u_per_mean'] = np.mean(rmse_u_per, axis=0)
@@ -80,6 +94,19 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
         results['rmse_v_per_std'] = np.std(rmse_v_per, axis=0)
 
     if acc_flag:
+        results['acc_u_median'] = np.quantile(np.stack(acc_u, axis=0), 0.5, axis=0)
+        results['acc_u_uq'] = np.quantile(np.stack(acc_u, axis=0), 0.75, axis=0)
+        results['acc_u_lq'] = np.quantile(np.stack(acc_u, axis=0), 0.25, axis=0)
+        results['acc_u_per_median'] = np.quantile(np.stack(acc_u_per, axis=0), 0.5, axis=0)
+        results['acc_u_per_uq'] = np.quantile(np.stack(acc_u_per, axis=0), 0.75, axis=0)
+        results['acc_u_per_lq'] = np.quantile(np.stack(acc_u_per, axis=0), 0.25, axis=0)
+        results['acc_v_median'] = np.quantile(np.stack(acc_v, axis=0), 0.5, axis=0)
+        results['acc_v_uq'] = np.quantile(np.stack(acc_v, axis=0), 0.75, axis=0)
+        results['acc_v_lq'] = np.quantile(np.stack(acc_v, axis=0), 0.25, axis=0)
+        results['acc_v_per_median'] = np.quantile(np.stack(acc_v_per, axis=0), 0.5, axis=0)
+        results['acc_v_per_uq'] = np.quantile(np.stack(acc_v_per, axis=0), 0.75, axis=0)
+        results['acc_v_per_lq'] = np.quantile(np.stack(acc_v_per, axis=0), 0.25, axis=0)
+
         results['acc_u_mean'] = np.mean(acc_u, axis=0)
         results['acc_u_std'] = np.std(acc_u, axis=0)
         results['acc_u_per_mean'] = np.mean(acc_u_per, axis=0)
@@ -94,7 +121,7 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
         results['spectra_tar'] = np.mean(spectra_tar_list, axis=0)
         results['wavenumbers'] = wavenumbers_list
 
-    plot_analysis(results, short_analysis_params, dataset_params)
-
+    if short_analysis_params["plot_analysis"]:
+        plot_analysis(results, short_analysis_params, dataset_params)
 
     return results

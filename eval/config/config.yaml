@@ -14,7 +14,8 @@ short_analysis_params:
   num_ensembles: 10
   test_file_start_idx: 350000
   test_length_climo: 1000
-
+  plot_analysis: !!bool True
+  
 long_analysis_params:
 # For Train: Details would be taken from training config file
   long_analysis_train: !!bool True

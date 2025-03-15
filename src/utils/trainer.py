@@ -88,6 +88,7 @@ class Trainer():
                 checkpoint_model[key_new] = val
 
             print(f"Load pre-trained checkpoint from: {params['mae_finetune_fp']}")
+            print(f"Pre-trained checkpoint_model.keys(): {checkpoint_model.keys()}")
             state_dict = self.model.state_dict()
             #for k in ['head.weights', 'head.bias']:
             #    if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
@@ -95,9 +96,16 @@ class Trainer():
             #        del checkpoint_model[k]
             for key, val in state_dict.items():
                 if key in checkpoint_model.keys() and val.shape != checkpoint_model[key].shape:
-                    print(f'Removing key {key} from pretrained checkpoint.')
+                    print(f'Removing key {key} from pretrained checkpoint due to shape mismatch.')
                     del checkpoint_model[key]
 
+            # Drop decoder from pretrained checkpoint
+            for key, val in state_dict.items():
+                for layer in params['drop_layers']:
+                    if layer in key:
+                        print(f'Removing DECODER key {key} from pretrained checkpoint.')
+                        del checkpoint_model[key]
+        
             msg = self.model.load_state_dict(checkpoint_model, strict=False)
             print(msg)
 
@@ -107,6 +115,8 @@ class Trainer():
                     if freeze_layer in name:
                         print(f'Freezing {name}')
                         module.requires_grad = False
+
+            print(f'model.state_dict().keys(): {self.model.state_dict().keys()}')
 
         # Send model to device
         self.model.to(self.device)
@@ -223,6 +233,9 @@ class Trainer():
                   self.save_checkpoint(self.params.checkpoint_path)
                   if valid_logs["valid_loss"] <= best_valid_loss:
                      self.save_checkpoint(self.params.best_checkpoint_path)
+                  if (self.epoch+1) in self.params.ckpt_epoch_list:
+                      logging.info(f"Saving checkpoint at epoch {self.epoch+1}")
+                      self.save_checkpoint(self.params.checkpoint_epoch_path + f'_{self.epoch+1}.tar')
 
 
             if self.params["log_to_screen"]:
@@ -291,6 +304,7 @@ class Trainer():
             else:
                 outputs = self.model(inputs, train=True)
             
+
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
 
