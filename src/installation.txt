@@ -1,0 +1,3 @@
+pip install pytorch torchvision torchaudio pytorch 
+pip install wandb timm einops scipy ruamel.yaml nbformat nbconvert
+py2d
