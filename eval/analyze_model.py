@@ -159,7 +159,7 @@ def main(config):
         save_data = True
 
     print(f'Saving data for {save_data_length} snapshots')
-    if save_data:
+    if save_data and long_analysis_params["long_analysis_emulate"]:
 
         rollout_length = save_data_length
 

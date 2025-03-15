@@ -21,4 +21,4 @@ conda activate fourks
 module load nvhpc # for cuda, NVIDIA
 
 ## Run the python script
-python3 -u -m analyze_model config_short.yaml
+python3 -u -m analyze_model config.yaml

@@ -12,7 +12,7 @@ from py2d.convert import UV2Omega, Omega2UV
 
 from analysis.metrics import manual_eof, manual_svd_eof, divergence, PDF_compute
 from analysis.rollout import n_step_rollout
-from analysis.io_utils import load_numpy_data, get_npy_files, get_mat_files_in_range
+from analysis.io_utils import load_numpy_data, get_npy_files, get_mat_files_in_range, run_notebook_as_script
 
 def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_params, train_params):
 
@@ -35,7 +35,7 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
     else:
         perform_analysis = False
 
-    for dataset in ['train', 'emulate']:
+    for dataset in ['train', 'truth', 'emulate']:
 
         if not perform_analysis:
             break
@@ -43,16 +43,32 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
         print('-------------- Calculating for dataset: ', dataset)
 
         if dataset == 'emulate':
-            # Data predicted by the emualtor
-            files = get_npy_files(save_dir)
-            print(f"Number of saved predicted .npy files: {len(files)}")
-            analysis_dir_save = os.path.join(analysis_dir, 'emulate')
+            if long_analysis_params["long_analysis_emulator"]:
+                # Data predicted by the emualtor
+                files = get_npy_files(save_dir)
+                print(f"Number of saved predicted .npy files: {len(files)}")
+                analysis_dir_save = os.path.join(analysis_dir, 'emulate')
+            else:
+                continue
 
         elif dataset == 'train':
-            # Load training data
-            files = get_mat_files_in_range(os.path.join(train_params["data_dir"],'data'), train_params["train_file_range"])
-            print(f"Number of saved training .mat files: {len(files)}")
-            analysis_dir_save = os.path.join(analysis_dir, 'train')
+            if long_analysis_params["long_analysis_train"]:
+                # Load training data
+                files = get_mat_files_in_range(os.path.join(train_params["data_dir"],'data'), train_params["train_file_range"])
+                print(f"Number of training .mat files: {len(files)}")
+                analysis_dir_save = os.path.join(analysis_dir, 'train')
+            else:
+                continue
+
+        elif dataset == 'truth':
+            if long_analysis_params["long_analysis_truth"]:
+                # Load training data
+                # length of analysis for truth is same as emulator data
+                files = get_mat_files_in_range(os.path.join(train_params["data_dir"],'data'), long_analysis_params["truth_file_range"])
+                print(f"Number of truth .mat files: {len(files)}")
+                analysis_dir_save = os.path.join(analysis_dir, 'truth')
+            else:
+                continue
 
         os.makedirs(analysis_dir_save, exist_ok=True)
 
@@ -75,14 +91,19 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
         for i, file in enumerate(files):
             # if dataset == 'emulate' and i > long_analysis_params["analysis_length"]:
             #     break
-            if i > long_analysis_params["analysis_length"]:
+
+            if dataset == 'emulate' and i > long_analysis_params["analysis_length"]:
                 total_files_analyzed = i # i starts from 0 total_files_analyzed = (i+1)-1
+                print('break after analyzing # files ', total_files_analyzed)
                 break
             else:
                 total_files_analyzed = i+1
 
             if i%100 == 0:
-                print(f'File {i}/{ long_analysis_params["analysis_length"]}')
+                if dataset == 'emulate':
+                    print(f'File {i}/{ long_analysis_params["analysis_length"]}')
+                else:
+                    print(f'File {i}/{len(files)}')
 
             if dataset == 'emulate':
                 data  = np.load(os.path.join(save_dir, file))
@@ -92,7 +113,7 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 Omega = Omega_transpose.T
 
 
-            elif dataset == 'train':
+            elif dataset == 'train' or dataset == 'truth':
                 data = loadmat(os.path.join(train_params["data_dir"], 'data', file))
                 Omega = data['Omega'].T
                 U_transpose, V_transpose = Omega2UV(Omega.T, Kx, Ky, invKsq, spectral = False)
@@ -188,36 +209,19 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
 
             np.savez(os.path.join(analysis_dir_save, 'pdf.npz'), Omega_mean=Omega_mean, Omega_std=Omega_std, Omega_pdf=Omega_pdf, Omega_bins=Omega_bins, bw_scott=bw_scott, U_mean=U_mean, U_std=U_std, U_pdf=U_pdf, U_bins=U_bins, long_analysis_params=long_analysis_params, dataset_params=dataset_params)
 
-
-    import nbformat
-    from nbconvert import PythonExporter
-
-    def run_notebook_as_script(notebook_path):
-        """
-        Executes a Jupyter Notebook file (.ipynb) as a Python script.
-        
-        Args:
-            notebook_path (str): Path to the Jupyter Notebook file.
-        """
-        # Load the notebook
-        with open(notebook_path, 'r', encoding='utf-8') as f:
-            notebook = nbformat.read(f, as_version=4)
-        
-        # Convert notebook to Python script
-        exporter = PythonExporter()
-        python_code, _ = exporter.from_notebook_node(notebook)
-        
-        # Execute the script
-        exec(python_code, globals())
-
-    # Path to your Jupyter Notebook
+    # Plotting and saving figures for long analysis
     notebook_file = "plot.ipynb"
 
     # Ensure the notebook file exists
-    if os.path.exists(notebook_file):
-        run_notebook_as_script(notebook_file)
-    else:
-        print(f"Notebook file {notebook_file} not found!")
+    try: 
+        if os.path.exists(notebook_file):
+            run_notebook_as_script(notebook_file)
+        else:
+            print(f"Notebook file {notebook_file} not found!")
+
+    except Exception as e:
+        print(f"Error running notebook")
+        print(e)
 
     if long_analysis_params["video"]:
 

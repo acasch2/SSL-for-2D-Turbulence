@@ -1,5 +1,5 @@
 dataset_params:
-  run_num: "base3"
+  run_num: "base"
   root_dir: "/ocean/projects/phy220045p/jakhar/2d_emulator_vision/SSL-for-2D-Turbulence/results/BASE/"
   model_filename: "training_checkpoints/best_ckpt.tar"
   params_filename: "hyperparams.yaml"
@@ -16,11 +16,21 @@ short_analysis_params:
   test_length_climo: 1000
 
 long_analysis_params:
-# Data would be saved to perform any long analysis
-# Run plots.ipynb to generate and save plots
-  save_data_length: 20000 # number of training timesteps emulated and saved
-  analysis_length: 20000 # number of training timesteps emulated for analysis (
+# For Train: Details would be taken from training config file
+  long_analysis_train: !!bool True
+
+# For Truth
+  long_analysis_truth: !!bool True
+  truth_file_range: [200000, 300000]
+
+# For emualtor
+  long_analysis_emulator: !!bool True
+# Data would be saved to perform any long analysis for emulator
+  save_data_length: 1000 # number of training timesteps emulated and saved
+  analysis_length: 1000 # number of training timesteps emulated for analysis (
   # For Training data analysis_length is the smaller value in between analysis_length vs training_length
+
+# Analysis
   temporal_mean: !!bool True
   zonal_mean: !!bool True
   zonal_eof: !!bool True
