@@ -96,8 +96,8 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         mean = [mean_std_data['U_mean'], mean_std_data['V_mean'] ]
         std = [mean_std_data['U_std'], mean_std_data['V_std'] ]
         # std = list(np.load(std_fp))
-        print(f'mean: {mean}')
-        print(f'std: {std}')
+        # print(f'mean: {mean}')
+        # print(f'std: {std}')
 
         return mean, std
 
