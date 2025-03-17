@@ -93,17 +93,18 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
         for i, file in enumerate(files):
             # if dataset == 'emulate' and i > long_analysis_params["analysis_length"]:
             #     break
-
             if dataset == 'emulate' and i > long_analysis_params["analysis_length"]:
                 total_files_analyzed = i # i starts from 0 total_files_analyzed = (i+1)-1
                 print('break after analyzing # files ', total_files_analyzed)
                 break
+            else:
                 total_files_analyzed = i+1
 
+            if i%100 == 0:
+                if dataset == 'emulate':
                     print(f'File {i}/{ long_analysis_params["analysis_length"]}')
                 else:
                     print(f'File {i}/{len(files)}')
-
 
             if dataset == 'emulate':
                 data  = np.load(os.path.join(save_dir, file))
@@ -111,8 +112,6 @@ def perform_long_analysis(save_dir, analysis_dir, dataset_params, long_analysis_
                 V = data[1,:]
                 Omega_transpose = UV2Omega(U.T, V.T, Kx, Ky, spectral = False)
                 Omega = Omega_transpose.T
-
-
 
             elif dataset == 'train' or dataset == 'truth':
 
