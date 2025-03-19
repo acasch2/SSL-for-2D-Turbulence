@@ -4,6 +4,8 @@ BASE: &BASE
 
     exp_dir: '/pscratch/sd/d/dpp94/SSL-2DTurb/'
 
+    init_seed: 0
+    
     log_to_screen: !!bool True
     log_to_wandb: !!bool False #True
     wandb_table_logging_interval: 10
@@ -59,6 +61,8 @@ BASE: &BASE
 MAE_PRETRAIN: &MAE_PRETRAIN
     <<: *BASE
 
+    init_seed: 0
+
     log_to_screen: !!bool True
     log_to_wandb: !!bool False #True
     wandb_table_logging_interval: 10
@@ -86,6 +90,8 @@ MAE_PRETRAIN: &MAE_PRETRAIN
 MAE_FINETUNE: &MAE_FINETUNE
     <<: *MAE_PRETRAIN
 
+    init_seed: 0 
+
     log_to_screen: !!bool True
     log_to_wandb: !!bool True
     wandb_table_logging_interval: 10
@@ -111,5 +117,78 @@ MAE_FINETUNE: &MAE_FINETUNE
 
     mae_finetune: True
     mae_finetune_fp: '/pscratch/sd/d/dpp94/SSL-2DTurb/MAE_PRETRAIN/0002/training_checkpoints/best_ckpt.tar'
+    freeze_layers: [] #['encoder', 'patch_embed']   
+    drop_layers: [] #['decoder', 'patchrecovery']
+
+
+
+SMAE_PRETRAIN: &SMAE_PRETRAIN
+    <<: *BASE
+
+    init_seed: 0 
+
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool True
+    wandb_table_logging_interval: 20
+    project: 'SSL-2DTurb'
+    group: 'Dhruvit-smae-pretrain'
+    name: '0000'
+    diagnostic_logs: !!bool True
+
+    ckpt_epoch_list: []
+
+    target_step: 0
+    target_step_hist: 3
+
+    train_file_range: [200000, 220000]
+    valid_file_range: [310000, 312000]
+
+    num_frames: 2
+    tubelet_size: 2
+    num_out_frames: 2  
+
+    preprocess: 'Fourier'
+    cutoff_low: 0.01
+    cutoff_high: 0.05
+    filter_shuffle: False
+    filter_type: 'lowpass'
+    window_type: 'gaussian'
+    tukey_alpha: 1
+    use_spectral_weights: False
+    spectrally_weigh_input: False
+    spectrally_weigh_output: False
+
+
+
+SMAE_FINETUNE: &SMAE_FINETUNE
+    <<: *SMAE_PRETRAIN
+
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool True
+    wandb_table_logging_interval: 20
+    project: 'SSL-2DTurb'
+    group: 'Dhruvit-smae-finetune'
+    name: '0000_v1_full'
+    diagnostic_logs: !!bool True
+
+    ckpt_epoch_list: [1, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
+
+    target_step: 3
+    target_step_hist: 3
+
+    train_file_range: [200000, 220000]
+    valid_file_range: [310000, 312000]
+
+    lr: 5e-4
+    scheduler: 'ReduceLROnPlateau'
+    warmup: !!bool False
+    max_epochs: 500
+    
+    num_frames: 2
+    tubelet_size: 2
+    num_out_frames: 1
+
+    smae_finetune: True
+    smae_finetune_fp: '/pscratch/sd/d/dpp94/SSL-2DTurb/SMAE_PRETRAIN/0000_v1/training_checkpoints/best_ckpt.tar'
     freeze_layers: [] #['encoder', 'patch_embed']   
     drop_layers: [] #['decoder', 'patchrecovery']

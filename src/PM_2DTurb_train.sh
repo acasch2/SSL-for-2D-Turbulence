@@ -1,5 +1,5 @@
 #!/bin/bash -l                                                          
-#SBATCH --time=1-00:00:00                                                     
+#SBATCH --time=00:05:00                                                     
 #SBATCH -C 'gpu&hbm40g'
 #SBATCH --account=m4416                                         
 #SBATCH -q regular                                                      
@@ -8,12 +8,16 @@
 #SBATCH --gpus-per-node=4                                               
 #SBATCH --cpus-per-task=8
 #SBATCH --module=gpu,nccl-2.18                                          
-#SBATCH -o /pscratch/sd/d/dpp94/Logfiles/2DTurb_finetune_%x.out
+#SBATCH -o /pscratch/sd/d/dpp94/Logfiles/2DTurb_${SLURM_JOB_NAME}.out
 #SBATCH --mail-type=begin,end,fail                                      
 #SBATCH --mail-user=dpp94@uchicago.edu 
 
 
-# COMMAND: sbatch -J 'xxxx' test_wandb.sh 'xxxx'  - where 'xxxx' is RUN_NUM
+# COMMAND: sbatch -J <job_name> PM_2DTurb_train.sh <run_num> <yaml_config> <config>
+# <job_name>: Job name used by slurm
+# <run_num>: run_num used to create expDir to store all run details
+# <yaml_config>: absolute path for YAML config file
+# <config>: config name
 
 set -x
 
@@ -32,13 +36,9 @@ export OMP_NUM_THREADS=1
 # ------ WANDB ------ #
 
 source $HOME/set_wandb_key_dpp94.sh
-
-# ------ Define all input args ------ #
-
-YAML_CONFIG=/global/homes/d/dpp94/SSL-for-2D-Turbulence/src/config/vitnet_PM.yaml
-CONFIG=MAE_FINETUNE
+export WANDB_MODE=online
 
 
 # ------ Run main script ------ #
 
-torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} mae_finetune.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start
+torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} train.py --yaml_config=${2} --config=${3} --run_num=${1} --fresh_start

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import yaml
 
-config_file_path = "config/config_video_v1_PM.yaml"
+config_file_path = "config/config_SMAE_FINETUNE_0000_v1_full.yaml"
 with open(config_file_path, "r") as f:
     config = yaml.safe_load(f)
 

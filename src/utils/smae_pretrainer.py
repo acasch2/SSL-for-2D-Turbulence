@@ -1,4 +1,4 @@
-from models.masked_autoencoder import MAEViT
+from models.vision_transformer import ViT
 from utils.data_loaders import get_dataloader
 import os
 from collections import OrderedDict
@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from utils.diagnostics import grad_norm, grad_max, log_input_target_prediction
+from utils.preprocessor import get_spectral_preprocessor
 #from torch.profiler import profile, record_function, ProfilerActivity
 
 #torch.backends.cuda.enable_flash_sdp(True)
@@ -32,10 +33,9 @@ class Trainer():
                                                                                        train_tendencies=params["train_tendencies"],
                                                                                        batch_size=params["batch_size"],
                                                                                        train=True,
+                                                                                       distributed=dist.is_initialized(),
                                                                                        num_frames=params["num_frames"],
                                                                                        num_out_frames=params["num_out_frames"],
-                                                                                       target_step_hist=params["target_step_hist"],
-                                                                                       distributed=dist.is_initialized(),
                                                                                        num_workers=params["num_workers"],
                                                                                        pin_memory=params["pin_memory"])
 
@@ -45,10 +45,9 @@ class Trainer():
                                                                    train_tendencies=params["train_tendencies"],
                                                                    batch_size=params["batch_size"],
                                                                    train=False,
+                                                                   distributed=dist.is_initialized(),
                                                                    num_frames=params["num_frames"],
                                                                    num_out_frames=params["num_out_frames"],
-                                                                   target_step_hist=params["target_step_hist"],
-                                                                   distributed=dist.is_initialized(),
                                                                    num_workers=params["num_workers"],
                                                                    pin_memory=params["pin_memory"])
         logging.info("data loader initialized")
@@ -61,12 +60,17 @@ class Trainer():
             epoch_metrics = ['lr', 'train_loss', 'val_loss']
             for metric in epoch_metrics:
                 wandb.define_metric(metric, step_metric="epoch")
-
+            
             self.wandb_table = wandb.Table(columns=['Id', 'Input', 'Target', 'Prediction', 'Target-Prediction'])
             
+        
+        # Initiate preprocessor
+        if params.preprocess:
+            self.preprocessor = get_spectral_preprocessor(params)
+            self.preprocessor.to(self.device)
 
         # Construct model
-        self.model = MAEViT(
+        self.model = ViT(
             img_size=params["img_size"],
             patch_size=params["patch_size"],
             num_frames=params["num_frames"],
@@ -92,6 +96,7 @@ class Trainer():
                 checkpoint_model[key_new] = val
 
             print(f"Load pre-trained checkpoint from: {params['mae_finetune_fp']}")
+            print(f"Pre-trained checkpoint_model.keys(): {checkpoint_model.keys()}")
             state_dict = self.model.state_dict()
             #for k in ['head.weights', 'head.bias']:
             #    if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
@@ -99,9 +104,16 @@ class Trainer():
             #        del checkpoint_model[k]
             for key, val in state_dict.items():
                 if key in checkpoint_model.keys() and val.shape != checkpoint_model[key].shape:
-                    print(f'Removing key {key} from pretrained checkpoint.')
+                    print(f'Removing key {key} from pretrained checkpoint due to shape mismatch.')
                     del checkpoint_model[key]
 
+            # Drop decoder from pretrained checkpoint
+            for key, val in state_dict.items():
+                for layer in params['drop_layers']:
+                    if layer in key:
+                        print(f'Removing DECODER key {key} from pretrained checkpoint.')
+                        del checkpoint_model[key]
+        
             msg = self.model.load_state_dict(checkpoint_model, strict=False)
             print(msg)
 
@@ -111,6 +123,8 @@ class Trainer():
                     if freeze_layer in name:
                         print(f'Freezing {name}')
                         module.requires_grad = False
+
+            print(f'model.state_dict().keys(): {self.model.state_dict().keys()}')
 
         # Send model to device
         self.model.to(self.device)
@@ -128,8 +142,8 @@ class Trainer():
         if dist.is_initialized():
             self.model = DistributedDataParallel(self.model,
                                                  device_ids=[params.local_rank],
-                                                 output_device=[params.local_rank]) #,
-                                                 #find_unused_parameters=True)
+                                                 output_device=[params.local_rank],
+                                                 find_unused_parameters=True)
        
 
         self.iters = 0
@@ -225,6 +239,9 @@ class Trainer():
                   self.save_checkpoint(self.params.checkpoint_path)
                   if valid_logs["valid_loss"] <= best_valid_loss:
                      self.save_checkpoint(self.params.best_checkpoint_path)
+                  if (self.epoch+1) in self.params.ckpt_epoch_list:
+                      logging.info(f"Saving checkpoint at epoch {self.epoch+1}")
+                      self.save_checkpoint(self.params.checkpoint_epoch_path + f'_{self.epoch+1}.tar')
 
 
             if self.params["log_to_screen"]:
@@ -276,23 +293,35 @@ class Trainer():
 
             tr_start = time.time()
 
+            # Preprocess
+            if self.params.preprocess:
+                if self.params.use_spectral_weights:
+                    inputs, labels, label_weights = self.preprocessor(inputs)
+                else:
+                    inputs, labels = self.preprocessor(inputs)
+                    label_weights = None
+                # If need to separately filter inputs and labels (e.g., ts=1), modify preprocessor to
+                # return filter and also optionally accept filter... then return filters used
+                # for generating inputs and pass that to preprocessor when generating labels.
+                # MAKE SURE TO ALSO MODIFY VALIDATION CODE BELOW!
+
             self.model.zero_grad()
             self.optimizer.zero_grad(set_to_none=True)
 
             # Profile
             #with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
             #    with record_function("model inference"):
-            
-            #outputs = self.model(inputs, train=True)
-            #loss = self.model.module.forward_loss(labels, outputs)
+        
+            # Add noise
+            #noise = 0.1 * (2 * torch.rand(inputs.shape) - 1)
+            #inputs += noise
 
-            pred, mask = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=True)
-
+            outputs = self.model(inputs, train=True)
+           
             if dist.is_initialized():
-                loss = self.model.module.forward_loss(labels, pred, mask)
+                loss = self.model.module.forward_loss(labels, outputs, weights=label_weights)
             else:
-                loss = self.model.forward_loss(labels, pred, mask)
-            #loss, _, _ = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=True)
+                loss = self.model.forward_loss(labels, outputs, weights=label_weights)
 
             loss.backward()
 
@@ -364,15 +393,26 @@ class Trainer():
 
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
-                #outputs = self.model(inputs, train=False)
-                #loss = self.model.module.forward_loss(labels, outputs)
+                # Preprocess
+                if self.params.preprocess:
+                    if self.params.use_spectral_weights:
+                        inputs, labels, label_weights = self.preprocessor(inputs)
+                    else:
+                        inputs, labels = self.preprocessor(inputs)
+                        label_weights = None
+                    # If need to separately filter inputs and labels (e.g., ts=1), modify preprocessor to
+                    # return filter and also optionally accept filter... then return filters used
+                    # for generating inputs and pass that to preprocessor when generating labels.
 
-                pred, mask = self.model(inputs, mask_ratio=self.params["mask_ratio"], train=False)
+                outputs = self.model(inputs, train=False)
 
                 if dist.is_initialized():
-                    loss = self.model.module.forward_loss(labels, pred, mask)
+                    loss = self.model.module.forward_loss(labels, outputs, weights=label_weights)
                 else:
-                    loss = self.model.forward_loss(labels, pred, mask)
+                    loss = self.model.forward_loss(labels, outputs, weights=label_weights)
+
+                # check valid pred
+                self.val_pred = outputs
 
                 valid_loss += loss
 

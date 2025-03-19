@@ -1,4 +1,3 @@
-from utils.trainer import Trainer
 from utils.YParams import YParams
 import torch
 import torch.distributed as dist
@@ -7,7 +6,15 @@ import os
 import argparse
 from ruamel.yaml.comments import CommentedMap as ruamelDict
 from ruamel.yaml import YAML
+import numpy as np
 
+
+def set_seed(seed):                                       
+    logging.info("Using seed {}".format(seed))                          
+    import random
+    random.seed(seed)                                                   
+    np.random.seed(seed)                                                
+    torch.manual_seed(seed)   
 
 if __name__=='__main__':
     
@@ -16,7 +23,9 @@ if __name__=='__main__':
     parser.add_argument("--yaml_config", type=str)
     parser.add_argument("--config", type=str)
     parser.add_argument("--epochs", default=0, type=int)
-    parser.add_argument("--fresh_start", action="store_true", help="Start training from scratch, ignoring existing checkpoints")
+    parser.add_argument("--fresh_start", 
+                        action="store_true", 
+                        help="Start training from scratch, ignoring existing checkpoints")
 
     args = parser.parse_args()
 
@@ -45,7 +54,7 @@ if __name__=='__main__':
         world_rank = 0
         local_rank = 0
 
-    torch.manual_seed(world_rank)
+    #torch.manual_seed(world_rank)
     torch.cuda.set_device(local_rank)
     torch.backends.cudnn.benchmark = True
 
@@ -103,9 +112,23 @@ if __name__=='__main__':
         with open(os.path.join(expDir, 'hyperparams.yaml'), 'w') as hpfile:
             yaml.dump(hparams, hpfile)
 
-
     
-    logging.info("Preparing base trainer.")
+    set_seed(params["init_seed"])
+    
+    # Load in Trainer module
+    logging.info(f'Config: {args.config}')
+    if args.config == 'BASE' or args.config == 'MAE_FINETUNE' or args.config == 'SMAE_FINETUNE':
+        logging.info("Importing Trainer from utils.trainer")
+        from utils.trainer import Trainer
+    elif args.config == 'MAE_PRETRAIN':
+        logging.info("Importing Trainer from utils.mae_pretrainer")
+        from utils.mae_pretrainer import Trainer
+    elif args.config == 'SMAE_PRETRAIN':
+        logging.info("Importing Trainer from utils.smae_pretrainer")
+        from utils.smae_pretrainer import Trainer
+    else:
+        raise ValueError("Invalid config: {args.config}")
+
     trainer = Trainer(params, world_rank)
 
     trainer.train()

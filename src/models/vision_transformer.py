@@ -180,13 +180,16 @@ class ViT(nn.Module):
 
       return x
 
-  def forward_loss(self, img, pred):
+  def forward_loss(self, img, pred, weights=None):
       """
       img: B, C, T, H, W
       pred: B, C, T, H, W
+      weights: (optional) B, C, T, H, W
       """
 
       loss = (pred - img) ** 2
+      if weights is not None:
+          loss *= weights
       #loss = torch.abs(pred-img)
       loss = loss.mean()
 
