@@ -140,6 +140,11 @@ def main(config):
 
         results_short = perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_analysis_params, train_params, dataset_params)
         print('short analysis performed')
+
+        if short_analysis_params["save_short_analysis"]:
+            print('saving short analysis results')
+            np.savez(os.path.join(analysis_dir, 'emulate', 'short_analysis.npz'), **results_short)
+
     else:
         print('No short analysis requested')
 

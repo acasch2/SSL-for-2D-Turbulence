@@ -1,5 +1,5 @@
 #!/bin/bash -l                                                          
-#SBATCH --time=00:05:00                                                     
+#SBATCH --time=1-02:00:00                                                     
 #SBATCH -C 'gpu&hbm40g'
 #SBATCH --account=m4416                                         
 #SBATCH -q regular                                                      
