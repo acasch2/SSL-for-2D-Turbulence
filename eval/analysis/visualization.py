@@ -13,6 +13,7 @@ def plot_analysis(results, analysis_dict, dataset_params):
     if analysis_dict['rmse']:
         # U
         fig, ax = plt.subplots()
+
         x = np.arange(1, 1+len(results['rmse_u_median'])) 
         ax.plot(x, results['rmse_u_median'], '-k', label='ML')
         upper = results['rmse_u_uq'] # + results['rmse_u_std']
@@ -26,11 +27,13 @@ def plot_analysis(results, analysis_dict, dataset_params):
         ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([0, 3.5])
         ax.set_xlim([0, len(results['rmse_u_median'])])
+
         ax.legend()
         plt.tight_layout()
         fig.savefig(plot_dir + '/RMSE_U_' + '.svg')
         # V
         fig, ax = plt.subplots()
+
         ax.plot(x, results['rmse_v_median'], '-k', label='ML')
         upper = results['rmse_v_uq'] # + results['rmse_v_std']
         lower = results['rmse_v_lq'] # - results['rmse_v_std']
@@ -43,6 +46,7 @@ def plot_analysis(results, analysis_dict, dataset_params):
         ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([0, 3.5])
         ax.set_xlim([0, len(results['rmse_v_median'])])
+
         ax.legend()
         plt.tight_layout()
         fig.savefig(plot_dir + '/RMSE_V_' + '.svg')
@@ -50,6 +54,7 @@ def plot_analysis(results, analysis_dict, dataset_params):
     if analysis_dict['acc']:
         # U
         fig, ax = plt.subplots()
+
         x = np.arange(1, 1+len(results['acc_u_median'])) 
         ax.plot(x, results['acc_u_median'], '-k', label='ML')
         upper = results['acc_u_uq'] # + results['acc_u_std']
@@ -63,11 +68,13 @@ def plot_analysis(results, analysis_dict, dataset_params):
         ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([-1, 1])
         ax.set_xlim([0, len(results['acc_u_median'])])
+
         ax.legend()
         plt.tight_layout()
         fig.savefig(plot_dir + '/ACC_U_' + '.svg')
         # V
         fig, ax = plt.subplots()
+
         ax.plot(x, results['acc_v_median'], '-k', label='ML')
         upper = results['acc_v_uq'] # + results['acc_v_std']
         lower = results['acc_v_lq'] # - results['acc_v_std']
@@ -80,6 +87,7 @@ def plot_analysis(results, analysis_dict, dataset_params):
         ax.set_xlabel(rf'Lead time ($\Delta t$)')
         ax.set_ylim([-1, 1])
         ax.set_xlim([0, len(results['acc_v_median'])])
+
         ax.legend()
         plt.tight_layout()
         fig.savefig(plot_dir + '/ACC_V_' + '.svg')
@@ -90,7 +98,9 @@ def plot_analysis(results, analysis_dict, dataset_params):
         ax.plot(x, results['spectra_tar'][0], '-k', label='Truth')
         for lead in analysis_dict['spectra_leadtimes']:
             spec = results['spectra'][lead]
+
             label = rf'{lead+1}$\Delta t$' 
+
             ax.plot(x, spec, label=label)
             ax.set_xscale('log')
             ax.set_yscale('log')
@@ -168,10 +178,13 @@ def make_video_old(pred, tar):
             fig.subplots_adjust(right=0.85)
             cbar_ax = fig.add_axes([0.9, 0.15, 0.05, 0.7])
             fig.colorbar(im, cax=cbar_ax)
+
             fig.suptitle(rf'{t+1}$\Delta t$')
+
             fig.savefig('temp_frame.png', bbox_inches='tight')
             plt.close()
 
             frames.append(imageio.imread('temp_frame.png'))
+
 
     imageio.mimsave(f'Video_' + run_num + '.gif', frames, fps=1)

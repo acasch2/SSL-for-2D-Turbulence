@@ -2,6 +2,8 @@ import os
 import ast
 from ruamel.yaml import YAML
 import numpy as np
+import nbformat
+from nbconvert import PythonExporter
 
 def load_params(params_fp):
     yaml = YAML(typ='safe')
@@ -64,3 +66,21 @@ def get_mat_files_in_range(data_dir, file_range):
     # Sort the files numerically based on their numeric part
     filtered_files.sort(key=lambda x: int(x.split('.')[0]))
     return filtered_files
+
+def run_notebook_as_script(notebook_path):
+    """
+    Executes a Jupyter Notebook file (.ipynb) as a Python script.
+    
+    Args:
+        notebook_path (str): Path to the Jupyter Notebook file.
+    """
+    # Load the notebook
+    with open(notebook_path, 'r', encoding='utf-8') as f:
+        notebook = nbformat.read(f, as_version=4)
+    
+    # Convert notebook to Python script
+    exporter = PythonExporter()
+    python_code, _ = exporter.from_notebook_node(notebook)
+    
+    # Execute the script
+    exec(python_code, globals())

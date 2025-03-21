@@ -70,6 +70,7 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
 
     # Aggregate results
     if rmse_flag:
+
         results['rmse_u_median'] = np.quantile(np.stack(rmse_u, axis=0), 0.5, axis=0)
         results['rmse_u_uq'] = np.quantile(np.stack(rmse_u, axis=0), 0.75, axis=0)
         results['rmse_u_lq'] = np.quantile(np.stack(rmse_u, axis=0), 0.25, axis=0)
@@ -119,9 +120,8 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
         results['spectra'] = np.mean(spectra_list, axis=0)
         results['spectra_tar'] = np.mean(spectra_tar_list, axis=0)
         results['wavenumbers'] = wavenumbers_list
-    
+
     if short_analysis_params["plot_analysis"]:
         plot_analysis(results, short_analysis_params, dataset_params)
-
 
     return results

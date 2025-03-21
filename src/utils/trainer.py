@@ -11,6 +11,7 @@ from torch.nn.parallel import DistributedDataParallel
 from utils.diagnostics import grad_norm, grad_max, log_input_target_prediction
 #from torch.profiler import profile, record_function, ProfilerActivity
 
+
 #torch.backends.cuda.enable_flash_sdp(True)
 
 class Trainer():
@@ -178,12 +179,14 @@ class Trainer():
 
 
     def train(self):
+        # Iterate over all epocs
         if self.params["log_to_screen"]:
             logging.info("Starting training loop ...")
 
         best_valid_loss = 1.e6
         early_stopping_counter = 0
         early_stop_epoch_triggered = False
+
         for epoch in range(self.params["max_epochs"]):
             
             if self.early_stop_epoch is not None and epoch > self.early_stop_epoch:
@@ -198,7 +201,7 @@ class Trainer():
 
             start = time.time()
 
-            tr_time, data_time, train_logs = self.train_one_epoch()
+            tr_time, data_time, train_logs = self.train_one_epoch() # Train one epoch
             valid_time, valid_logs = self.validate_one_epoch()
 
             # Adjust lr rate schedule if using
@@ -290,20 +293,31 @@ class Trainer():
             self.model.zero_grad()
             self.optimizer.zero_grad(set_to_none=True)
 
-            # Profile
-            #with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
+            # # Profile
+            # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as prof:
             #    with record_function("model inference"):
-        
-            # Add noise
-            #noise = 0.1 * (2 * torch.rand(inputs.shape) - 1)
-            #inputs += noise
+            
+            if self.params['integrator'] == 'E1':
+                outputs = self.E1_integrator(inputs, train=True)
+            elif self.params['integrator'] == 'RK2':
+                outputs = self.RK2_integrator(inputs, train=True)
+            elif self.params['integrator'] == 'RK4':
+                outputs = self.RK4_integrator(inputs, train=True)
+                print('************* RK4 *************')
+            else:
+                outputs = self.model(inputs, train=True)
+            
 
-            outputs = self.model(inputs, train=True)
-           
             if dist.is_initialized():
                 loss = self.model.module.forward_loss(labels, outputs)
+
+                if self.params['spectral_loss']:
+                    loss += self.model.module.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
             else:
                 loss = self.model.forward_loss(labels, outputs)
+
+                if self.params['spectral_loss']:
+                    loss += self.model.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
 
             loss.backward()
 
@@ -312,6 +326,8 @@ class Trainer():
             tr_time += time.time() - tr_start
 
             with torch.no_grad():
+                # Computations within the track wont be tracked
+                # Loggings in Weights and biases
                 if self.params.diagnostic_logs:
                     diagnostic_logs['batch_grad_norm'] = torch.tensor([grad_norm(self.model)]).to(self.device)
                     diagnostic_logs['batch_grad_max'] = torch.tensor([grad_max(self.model)]).to(self.device)
@@ -331,8 +347,8 @@ class Trainer():
             
             torch.cuda.empty_cache()
 
-            #print(f'=============== PROFILER ==============\n')
-            #print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+            # print(f'=============== PROFILER ==============\n')
+            # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
         if self.params.diagnostic_logs:
             with torch.no_grad():
@@ -375,12 +391,27 @@ class Trainer():
 
                 inputs, labels = data[0].to(self.device, dtype=torch.float32), data[1].to(self.device, dtype=torch.float32)
 
-                outputs = self.model(inputs, train=False)
+
+                if self.params['integrator'] == 'E1':
+                    outputs = self.E1_integrator(inputs, train=False)
+                elif self.params['integrator'] == 'RK2':
+                    outputs = self.RK2_integrator(inputs, train=False)
+                elif self.params['integrator'] == 'RK4':
+                    outputs = self.RK4_integrator(inputs, train=False)
+
+                else:
+                    outputs = self.model(inputs, train=False)
 
                 if dist.is_initialized():
                     loss = self.model.module.forward_loss(labels, outputs)
+
+                    if self.params['spectral_loss']:
+                        loss += self.model.module.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
                 else:
                     loss = self.model.forward_loss(labels, outputs)
+
+                    if self.params['spectral_loss']:
+                        loss += self.model.spectral_loss(labels, outputs, self.params['spectral_loss_weight'], self.params['spectral_loss_threshold_wavenumber'])
 
                 # check valid pred
                 self.val_pred = outputs
@@ -431,7 +462,39 @@ class Trainer():
                 new_state_dict[name] = val
             self.model.load_state_dict(new_state_dict)
         self.iters = checkpoint['iters']
-        self.startEpoch = checkpoint['epoch']
+        self.startEpoch = checkpoint['epochs']
         print(f'START EPOCH:', self.startEpoch)
         if self.params.resuming:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    def E1_integrator(self, input, train=False):
+        """
+        input: B, C, T, H, W
+        """
+        k1 = self.model(input, train=train)
+        
+        return input + k1
+
+
+    def RK2_integrator(self, input, train=False):
+        """
+        input: B, C, T, H, W
+        """
+        k1 = self.model(input, train=train)
+        k2 = self.model(input + k1, train=train)
+    
+        return input + 0.5 * (k1 + k2)
+
+
+    def RK4_integrator(self, input, train=False):
+        """
+        input: B, C, T, H, W
+        Note: https://arxiv.org/abs/2304.07029
+        "Long-term instabilities of deep learning-based digital twins of the climate system: The cause and a solution"
+        """
+        k1 = self.model(input, train=train)
+        k2 = self.model(input + 0.5 * k1, train=train) 
+        k3 = self.model(input + 0.5 * k2, train=train)
+        k4 = self.model(input + k3, train=train)
+    
+        return input + 1/6 * (k1 + 2*k2 + 2*k3 + k4)

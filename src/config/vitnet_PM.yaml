@@ -6,6 +6,7 @@ BASE: &BASE
 
     init_seed: 0
     
+    # Login for Weights and biases
     log_to_screen: !!bool True
     log_to_wandb: !!bool False #True
     wandb_table_logging_interval: 10
@@ -14,36 +15,43 @@ BASE: &BASE
     name: '0000'
     diagnostic_logs: !!bool True
 
-    fresh_start: True
-    early_stopping: !!bool False
+    fresh_start: True # Training from checkpoint vs start (Need to test if it resumes at checkpoint)
+    early_stopping: !!bool False  # Not implemented
 
-    save_checkpoint: !!bool True
+    save_checkpoint: !!bool True # Two checkoiunts to save model weights: best and last epoc
     ckpt_epoch_list: [25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
 
     train_file_range: [200000, 220000]
     valid_file_range: [310000, 312000]
-    batch_size: 32 
-    target_step: 3
-    num_workers: 8
+    batch_size: 32 # Global batch size (not per GPU)
+    target_step: 3 # Number of time steps to predict in the future (prediction time step = target_step * saved time step)
+    num_workers: 8 # Number of workers for data loader per GPU (no imporvement after 2)
     pin_memory: !!bool True
 
     gpu: !!bool True
     lr: 5e-4
-    scheduler: 'ReduceLROnPlateau'
-    warmup: !!bool True
+    scheduler: 'ReduceLROnPlateau' # 'CosineAnnealingLR' 'ReduceLROnPlateau'
+    warmup: !!bool True # Warmup for LR scheduler (Start with low LR and then increase)
     warmup_startfactor: 0.001 
-    warmup_totaliters: 3
-    weight_decay: 1e-7 # 1e-7   # 1e-7 for video; 1e-6 for image
+    warmup_totaliters: 3 # Warm-up learning rate for the first N epochs
+    weight_decay: 1e-7 # 1e-7   # 1e-7 for video; 1e-6 for image # Regularization term for loss function (L2 norm)
     max_epochs: 500
-    checkpointing: !!bool False #True
+    checkpointing: !!bool False # True : For large models gradinet checkpointing is used to save memory (slows down upto 2 or so) May need to increase for patch size = 2
+ 
 
-    train_tendencies: !!bool False #True
+    integrator: null # 'null' 'E1' 'RK2' 'RK4' None, Euler 1st order, Runge-Kutta 2nd order, Runge-Kutta 4th order
+
+    spectral_loss: !!bool False # True: Use spectral loss for training
+    spectral_loss_weight: 1 # Weight (Regularizer Coefficient) for spectral loss
+    spectral_loss_threshold_wavenumber: 50 # Threshold wavenumber for spectral loss
+
+    train_tendencies: !!bool False #True # Training neural netwrok on difference of X(t+dt) - X(t) = Tendencies
 
     img_size: 256
     patch_size: 4
-    num_frames: 2
-    tubelet_size: 2
-    in_chans: 2
+    num_frames: 2 # Number of frames to consider for input (t, t-\deltat, t-2\deltat)
+    tubelet_size: 2 # Number of frames to consider for input imbedding - multiple timesteps are included in the same frame
+    in_chans: 2 # Number of input channels (u, v, ...)
     encoder_embed_dim: 192 # 96
     encoder_depth: 4 
     encoder_num_heads: 4 
@@ -51,7 +59,7 @@ BASE: &BASE
     decoder_depth: 4 
     decoder_num_heads: 4 
     mlp_ratio: 4.
-    num_out_frames: 1
+    num_out_frames: 1  # Numebr of output frames (time steps) to predict
     patch_recovery: "subpixel_conv"  #["linear", "conv", "subpixel_conv"]
 
     mae_finetune: False

@@ -29,11 +29,11 @@ class ViT(nn.Module):
       decoder_embed_dim=192,
       decoder_depth=6,
       decoder_num_heads=6,
-      mlp_ratio=4.,
+      mlp_ratio=4., 
       norm_layer=nn.LayerNorm,
       num_out_frames=1,
       patch_recovery='linear', # ['linear',conv','subpixel_conv']
-      checkpointing=None
+      checkpointing=None # gradient checkpointing
   ):
       super().__init__()
 
@@ -156,6 +156,9 @@ class ViT(nn.Module):
           x = checkpoint(self.norm, x, use_reentrant=False)
       else:
           x = self.norm(x)
+          
+        
+
 
       return x
 
@@ -192,6 +195,23 @@ class ViT(nn.Module):
           loss *= weights
       #loss = torch.abs(pred-img)
       loss = loss.mean()
+
+      return loss 
+  
+  def spectral_loss(self, img, pred, weight, threshold_wavenumber):
+      """
+      img: B, C, T, H, W
+      pred: B, C, T, H, W
+      """
+      # Calculating zonal fft and averageing
+      img_hat = torch.mean(torch.abs(torch.fft.rfft(img,dim=3)),dim=4)
+      pred_hat = torch.mean(torch.abs(torch.fft.rfft(pred,dim=3)),dim=4)
+
+        # Loss for both channels
+      loss1 = (pred_hat[:,0,:,threshold_wavenumber:]-img_hat[:,0,:,threshold_wavenumber:]) ** 2
+      loss2 = (pred_hat[:,1,:,threshold_wavenumber:]-img_hat[:,1,:,threshold_wavenumber:]) ** 2
+
+      loss = weight*0.5*(loss1.mean() + loss2.mean())
 
       return loss
 
