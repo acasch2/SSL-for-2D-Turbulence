@@ -156,12 +156,14 @@ SMAE_PRETRAIN: &SMAE_PRETRAIN
     num_out_frames: 2  
 
     preprocess: 'Fourier'
-    cutoff_low: 0.01
-    cutoff_high: 0.05
-    filter_shuffle: False
-    filter_type: 'lowpass'
-    window_type: 'gaussian'
-    tukey_alpha: 1
+    window_width: 42
+    window_center_kx: [24, 24] # range for locating center of window in x
+    window_center_ky: [24, 24]
+    window_type: 'gaussian' # ['gaussian', 'tukey', or 'rectangular']
+    window_gaussian_std: 7
+    window_tukey_alpha: 0.5
+    randomized_filters: False
+    filter_shuffle: True
     use_spectral_weights: False
     spectrally_weigh_input: False
     spectrally_weigh_output: False

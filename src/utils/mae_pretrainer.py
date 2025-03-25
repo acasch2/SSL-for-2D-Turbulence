@@ -380,7 +380,7 @@ class Trainer():
                     if (self.epoch % self.params.wandb_table_logging_interval == 1) and (i == 0):
                         logging.info("Logging validation [input, target, prediction] to wandb table.")
                         _wandb_table = wandb.Table(columns=self.wandb_table.columns, data=self.wandb_table.data)
-                        _wandb_table = log_input_target_prediction(inputs, labels, outputs, _wandb_table, self.epoch)
+                        _wandb_table = log_input_target_prediction(inputs, labels, pred, _wandb_table, self.epoch)
                         wandb.log({f"EPOCH {self.epoch} Validation Input/Target/Prediction" : _wandb_table})
                         #self.wandb_table = _wandb_table
 
