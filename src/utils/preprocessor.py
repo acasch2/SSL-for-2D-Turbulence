@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
+from scipy.signal.windows import gaussian, tukey
 
 
 def get_spectral_preprocessor(params):
@@ -23,132 +25,101 @@ class FourierFilterPreprocessor(nn.Module):
         super().__init__()
 
         self.filter_size = params['img_size']
-        self.cutoff_low = math.pi * params['cutoff_low']  # Lower cut-off frequency for filtering ([0, 1])
-        self.cutoff_high = math.pi * params['cutoff_high'] # Higher cut-off frequency fo filtering ([0, 1])
-        self.filter_shuffle = params['filter_shuffle'] # Shuffle f1/f2 randomly along batch dim
-        self.filter_type = params['filter_type']  # Lowpass, highpass, or bandpass
-        self.window_type = params['window_type']  # 'rectangular', 'gaussian' or 'tukey'
-        self.tukey_alpha = params['tukey_alpha']  # [0, 1] 0=rectangular 1=hanning
+        self.window_width = params['window_width']   # between (0, img_size/2)
+        self.window_center_kx = params['window_center_kx']   # range for locating center of mask (lower, upper)
+        self.window_center_ky = params['window_center_ky']
+        self.window_type = params['window_type']   # 'rectangular', 'gaussian' or 'tukey'
+        self.window_gaussian_std = params['window_gaussian_std']
+        self.window_tukey_alpha = params['window_tukey_alpha']
+        self.randomized_filters = params['randomized_filters']   # randomly generate filters along batch dim
+        self.filter_shuffle = params['filter_shuffle']   # Shuffle f1/f2 randomly along batch dim
         self.use_spectral_weights = params['use_spectral_weights']
         self.spectrally_weigh_input = params['spectrally_weigh_input']
         self.spectrally_weigh_output = params['spectrally_weigh_output']
 
-        if params['filter_type'] == 'bandpass':
-            self._create_filter_kernel = self._create_bandpass_filter_kernel
-        elif params['filter_type'] == 'lowpass' :
-            self._create_filter_kernel = self._create_lowpass_filter_kernel
-        elif params['filter_type'] == 'highpass':
-            self._create_filter_kernel = self._create_highpass_filter_kernel
-        else:
-            raise ValueError("Unknown filter type. Must be 'lowpass', 'highpass', or 'bandpass'.")
+    def _create_window(self):
+        """Create a 2D window for frequency domain filtering."""
 
-    def _create_gaussian_window(self, freq_grid, cutoff):
-        """Create a Gaussian window based on the frequency grid and cutoff."""
-        return torch.exp(-0.5 * (freq_grid / cutoff) ** 2)  # Gaussian filter in frequency domain
-
-    def _create_rectangular_window(self, freq_grid, cutoff):
-        """Create a rectangular window for low-pass or high-pass filtering."""
-        return torch.where(freq_grid <= cutoff, torch.ones_like(freq_grid), torch.zeros_like(freq_grid))
-
-    def _create_tukey_window(self, freq_grid, cutoff, alpha):
-        """
-        Create a 2D Tukey window for frequency domain filtering.
-
-        Args:
-            freq_grid (torch.Tensor): Normalized frequency grid
-            cutoff (float): Cutoff frequency
-            alpha (float): Tukey window parameter (0 to 1)
-                          0 gives rectangular window
-                          1 gives Hann window
-
-        Returns:
-            torch.Tensor: 2D Tukey window
-        """
-        # Normalize frequency grid to [0, 1] range relative to cutoff
-        normalized_freq = freq_grid / cutoff
-
-        # Initialize window with ones
-        window = torch.ones_like(freq_grid)
-
-        # Apply Tukey window taper where normalized_freq > 1
-        mask = normalized_freq > 1
-        tapered_region = 0.5 * (1 + torch.cos(torch.pi * (normalized_freq[mask] - 1) / alpha))
-        window[mask] = tapered_region
-
-        # Set frequencies beyond (1 + alpha) * cutoff to zero
-        window[normalized_freq > (1 + alpha)] = 0
-
+        # Create 1D window
+        if self.window_type == 'gaussian':
+            window = gaussian(self.window_width, std=self.window_gaussian_std)
+        elif self.window_type == 'tukey':
+            window = tukey(self.window_width, alpha=self.window_tukey_alpha)
+        elif self.window_type == 'rectangle':
+            window = tukey(self.window_width, alpha=0.)
+        
         return window
 
-    def _create_lowpass_filter_kernel(self, cutoff):
-        """Create a single lowpass filter kernel from specified parameters."""
-        freq_grid = self._create_frequency_grid()
+    def _create_filter_kernel(self, shifts):
+        """
+        Create bandpass filter kernel based on specified window type and cutoff.
+        Args:
+          shifts (tuple): (shift_x, shift_y)
+        """
 
-        if self.window_type == 'gaussian':
-            filter_kernel = self._create_gaussian_window(freq_grid, cutoff)
-        elif self.window_type == 'rectangular':
-            filter_kernel = self._create_rectangular_window(freq_grid, cutoff)
-        elif self.window_type == 'tukey':
-            filter_kernel = self._create_tukey_window(freq_grid, cutoff, self.tukey_alpha)
-        else:
-            raise ValueError("Unknown window type. Must be 'gaussian', 'rectangular', or 'tukey'.")
+        window_x = self._create_window()
+        
+        window_x = torch.from_numpy(window_x).float().to(self.device)
+        window_y = window_x.clone()
 
-        return filter_kernel, 1 - filter_kernel  # Lowpass and highpass complementary kernels
+        # Pad to half filter size length, shift, then extend by mirroring
+        window_x = F.pad(window_x, (0, self.filter_size//2 - self.window_width))
+        window_x = torch.roll(window_x, shifts[0])
+        window_x = torch.cat((window_x, torch.flipud(window_x)))
+        window_y = F.pad(window_y, (0, self.filter_size//2 - self.window_width))
+        window_y = torch.roll(window_y, shifts[1])
+        window_y = torch.cat((window_y, torch.flipud(window_y)))
 
-    def _create_highpass_filter_kernel(self, cutoff):
-        """Create a single highpass filter kernel based on specified parameters."""
-        freq_grid = self._create_frequency_grid()
-
-        if self.window_type == 'gaussian':
-            filter_kernel = self._create_gaussian_window(freq_grid, cutoff)
-        elif self.window_type == 'rectangular':
-            filter_kernel = self._create_rectangular_window(freq_grid, cutoff)
-        elif self.window_type == 'tukey':
-            filter_kernel = self._create_tukey_window(freq_grid, cutoff, self.tukey_alpha)
-        else:
-            raise ValueError("Unknown window type. Must be 'gaussian', 'rectangular', or 'tukey'.")
-
-        return 1 - filter_kernel, filter_kernel  # Highpass and lowpass complementary kernels
-
-    def _create_bandpass_filter_kernel(self):
-        """Create bandpass filter kernel based on specified window type and cutoff."""
-        # For bandpass, we need to combine lowpass and highpass filters
-        #lowpass, _ = self._create_lowpass_filter_kernel()
-        #_, highpass = self._create_highpass_filter_kernel()
-
-        # will need to create a lowpass filter based on cutoff_1 and a
-        # highpass filter based on cutoff_1 and kernel_width param and
-        # subtract 1 - lowpass - highpass
-        # return bandpass, lowpass+highpass
-
-        # add a self.example_filter = bandpass[0]
-
-        raise NotImplementedError
+        window = torch.outer(window_x, window_y)
+        return window, 1 - window
 
     def _generate_filter_batch(self):
 
-        f1 = torch.zeros(self.x_shape).to(self.device)
-        f2 = torch.zeros(self.x_shape).to(self.device)
-        for i in range(self.x_shape[0]):
-            # Select random cutoff between upper and lower thresholds
-            cutoff = (self.cutoff_high - self.cutoff_low)*torch.rand(1) + self.cutoff_low
-            f1[i,..., :, :], f2[i, ..., :, :] = self._create_filter_kernel(cutoff)
+        if not self.randomized_filters:
+            # Create single filter
+            shift_x, shift_y = self.window_center_kx[0], self.window_center_ky[0]
+            f1, f2 = self._create_filter_kernel((shift_x, shift_y))
+            # Expand into batch shape
+            f1 = f1.unsqueeze(0).unsqueeze(0).unsqueeze(0)   # shape (1, 1, 1, h, w)
+            f2 = f2.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+            f1 = f1.expand(self.x_shape)
+            f2 = f2.expand(self.x_shape)
+        else:
+            f1 = torch.zeros(self.x_shape, device=self.device)
+            f2 = torch.zeros(self.x_shape, device=self.device)
+            for i in range(self.x_shape[0]):
+                # Select random cutoff between upper and lower thresholds
+                shift_x = torch.randint(low=self.window_center_kx[0], 
+                                        high=self.window_center_kx[1], 
+                                        size=(1,), 
+                                        dtype=torch.int16) - self.window_width//2
+                shift_y = torch.randint(low=self.window_center_ky[0], 
+                                        high=self.window_center_ky[0], 
+                                        size=(1,), 
+                                        dtype=torch.int16) - self.window_width//2
+                f1[i,..., :, :], f2[i, ..., :, :] = self._create_filter_kernel((shift_x, shift_y))
 
         self.example_filter = f1[0]
 
         # Swap f1/f2 in half of the batch
         if self.filter_shuffle:
             half_b = self.x_shape[0] // 2
-            f1[:half_b], f2[:half_b] = f2[:half_b].clone(), f1[:half_b].clone()
+            
+            # Corrected version
+            new_tophalf = f2[:half_b].clone()
+            new_bottomhalf = f1[:half_b].clone()
+
+            # Create temporary copies to avoid in-place modification issues
+            temp_f1 = f1.clone()
+            temp_f2 = f2.clone()
+
+            # Perform the swap
+            temp_f1[:half_b] = new_tophalf
+            temp_f2[:half_b] = new_bottomhalf
+
+            return temp_f1, temp_f2
 
         return f1, f2
-
-    def _create_frequency_grid(self):
-        """Create normalized frequency grid for 2D Fourier transform."""
-        freq = torch.fft.fftfreq(self.filter_size, d=1/(2*torch.tensor(math.pi)))
-        fx, fy = torch.meshgrid(freq, freq, indexing='ij')
-        freq_grid = torch.sqrt(fx**2 + fy**2)
-        return freq_grid
 
     def _apply_filter(self, x, f1, f2):
         """Apply filter to data in spectral domain."""

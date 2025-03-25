@@ -8,7 +8,7 @@
 #SBATCH --gpus-per-node=4                                               
 #SBATCH --cpus-per-task=8
 #SBATCH --module=gpu,nccl-2.18                                          
-#SBATCH -o /pscratch/sd/d/dpp94/Logfiles/2DTurb_${SLURM_JOB_NAME}.out
+#SBATCH -o /pscratch/sd/d/dpp94/Logfiles/2DTurb_%x.out
 #SBATCH --mail-type=begin,end,fail                                      
 #SBATCH --mail-user=dpp94@uchicago.edu 
 

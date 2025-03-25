@@ -12,7 +12,7 @@ source $HOME/set_wandb_key_dpp94.sh
 
 YAML_CONFIG=/global/homes/d/dpp94/SSL-for-2D-Turbulence/src/config/vitnet_PM.yaml
 CONFIG=SMAE_PRETRAIN
-RUN_NUM=0000
+RUN_NUM=testing
 
 
 # ------ Run main script ------ #
