@@ -15,6 +15,7 @@ short_analysis_params:
   test_file_start_idx: 350000
   test_length_climo: 1000
   plot_analysis: !!bool True
+  save_short_analysis: !!bool True
   
 long_analysis_params:
 # For Train: Details would be taken from training config file

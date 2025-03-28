@@ -109,7 +109,6 @@ def main(config):
                                         distributed=dist.is_initialized(),
                                         num_frames=train_params["num_frames"],
                                         num_out_frames=train_params["num_out_frames"],
-                                        target_step_hist=train_params["target_step_hist"],
                                         num_workers=2,
                                         pin_memory=train_params["pin_memory"])
 
@@ -143,7 +142,9 @@ def main(config):
 
         if short_analysis_params["save_short_analysis"]:
             print('saving short analysis results')
-            np.savez(os.path.join(analysis_dir, 'emulate', 'short_analysis.npz'), **results_short)
+            save_fp = os.path.join(analysis_dir, 'emulate')
+            os.makedirs(save_fp, exist_ok=True)
+            np.savez(os.path.join(save_fp, 'short_analysis.npz'), **results_short)
 
     else:
         print('No short analysis requested')
