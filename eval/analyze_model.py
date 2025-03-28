@@ -109,6 +109,7 @@ def main(config):
                                         distributed=dist.is_initialized(),
                                         num_frames=train_params["num_frames"],
                                         num_out_frames=train_params["num_out_frames"],
+                                        target_step_hist=train_params["target_step_hist"],
                                         num_workers=2,
                                         pin_memory=train_params["pin_memory"])
 

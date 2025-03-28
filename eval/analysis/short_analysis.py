@@ -71,6 +71,8 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
     # Aggregate results
     if rmse_flag:
 
+        results['rmse_u'] = np.stack(rmse_u, axis=0)
+        results['rmse_v'] = np.stack(rmse_v, axis=0)
         results['rmse_u_median'] = np.quantile(np.stack(rmse_u, axis=0), 0.5, axis=0)
         results['rmse_u_uq'] = np.quantile(np.stack(rmse_u, axis=0), 0.75, axis=0)
         results['rmse_u_lq'] = np.quantile(np.stack(rmse_u, axis=0), 0.25, axis=0)
@@ -94,6 +96,9 @@ def perform_short_analysis(model, dataloader, dataset, climo_u, climo_v, short_a
         results['rmse_v_per_std'] = np.std(rmse_v_per, axis=0)
 
     if acc_flag:
+
+        results['acc_u'] = np.stack(acc_u, axis=0)
+        results['acc_v'] = np.stack(acc_v, axis=0)
         results['acc_u_median'] = np.quantile(np.stack(acc_u, axis=0), 0.5, axis=0)
         results['acc_u_uq'] = np.quantile(np.stack(acc_u, axis=0), 0.75, axis=0)
         results['acc_u_lq'] = np.quantile(np.stack(acc_u, axis=0), 0.25, axis=0)
