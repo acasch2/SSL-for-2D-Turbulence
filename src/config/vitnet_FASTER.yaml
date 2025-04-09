@@ -2,13 +2,13 @@
 BASE: &BASE
     data_dir: '/scratch/group/p.atm170020.000/2DTurbData/results/Re5000_fkx4fky4_r0.1_b20.0/NoSGS/NX256/dt0.0002_IC1/'
 
-    exp_dir: '/scratch/user/u.dp200518/SSL-2DTurb/'
+    exp_dir: '/scratch/user/u.aa286850/SSL-2DTurb/'
 
     log_to_screen: !!bool True
-    log_to_wandb: !!bool False #True
+    log_to_wandb: !!bool True #False #True
     project: 'SSL-2DTurb'
-    group: 'Dhruvit-base-emulator'
-    name: '0031'
+    group: 'Anna-base-emulator'
+    name: '0001'
     diagnostic_logs: !!bool True
 
     fresh_start: True

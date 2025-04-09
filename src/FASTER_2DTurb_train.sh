@@ -1,12 +1,13 @@
 #!/bin/bash
-#SBATCH --time=4-00:00:00
+#SBATCH --time=04:00:00
 #SBATCH -N 1
 #SBATCH --ntasks=2
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=250G
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:a40:2
-#SBATCH --output=/scratch/user/u.dp200518/Logfiles/2DTurb_Base_%x.out
+#SBATCH --output=/scratch/user/u.aa286850/Logfiles/2DTurb_Base_%x.out
+#SBATCH --error=/scratch/user/u.aa286850/Logfiles/2DTurb_Base_%x.err
 
 #SBATCH --account=145439188689
 
@@ -14,11 +15,11 @@
 
 set -x
 
-cd /home/u.dp200518/SSL-Wavelets/src
+cd /home/u.aa286850/SSL-for-2D-Turbulence/src
 
 
-#module load Anaconda3
-source activate /scratch/user/u.dp200518/.conda/envs/2DTurbEmulator
+module load Anaconda3
+source activate /scratch/user/u.aa286850/.conda/envs/2DTurbEmulator
 
 # ------ Define all DDP vars ------ #
 source export_DDP_vars.sh
@@ -28,14 +29,14 @@ export OMP_NUM_THREADS=1
 
 # ------ WANDB ------ #
 
-source $HOME/set_wandb_key_dpp94.sh
+source $HOME/wandb_setup_acasch.sh
 
 # ------ Define all input args ------ #
 
-YAML_CONFIG=/home/u.dp200518/SSL-Wavelets/src/config/vitnet.yaml
-CONFIG=MAE_FINETUNE
+YAML_CONFIG=/home/u.aa286850/SSL-for-2D-Turbulence/src/config/vitnet_FASTER.yaml
+CONFIG=BASE
 
 
 # ------ Run main script ------ #
 
-torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} mae_finetune.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start
+torchrun --nproc_per_node=${NUM_TASKS_PER_NODE} --nnodes=${SLURM_NNODES} train.py --yaml_config $YAML_CONFIG --config $CONFIG --run_num $1 --fresh_start

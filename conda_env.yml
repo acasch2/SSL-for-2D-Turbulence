@@ -344,4 +344,4 @@ dependencies:
       - urllib3==2.2.2
       - wandb==0.17.9
       - webdataset==0.2.86
-prefix: /scratch/user/u.dp200518/.conda/envs/2DTurbEmulator
+prefix: /scratch/user/u.aa286850/.conda/envs/2DTurbEmulator
